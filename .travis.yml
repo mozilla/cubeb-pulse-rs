@@ -4,6 +4,16 @@ notifications:
   email:
     on_success: never
 
+rust:
+- 1.15.1
+- stable
+- nightly
+
+env:
+# default jobs with and without optional features.
+-
+- FEATURES=pulse-dlopen
+
 # Invoke cargo with optional target or features switches.
 script: >
   cargo test
@@ -14,24 +24,17 @@ script: >
 before_install:
   if test -n "${TARGET}"; then rustup target add ${TARGET}; fi
 
-rust:
-  - 1.15.1
-  - stable
-  - nightly
 addons: &apt_64
   apt:
     packages:
     - libpulse-dev
-env:
-  # default jobs
-  -
-  - FEATURES=pulse-dlopen
+
 matrix:
   include:
   # Add in 32-bit builds
   - rust: 1.15.1
     env:
-      - TARGET=i686-unknown-linux-gnu
+    - TARGET=i686-unknown-linux-gnu
     addons: &apt_32
       apt:
         packages:
@@ -39,26 +42,26 @@ matrix:
         - libpulse-dev:i386
   - rust: 1.15.1
     env:
-      - TARGET=i686-unknown-linux-gnu
-      - FEATURES=pulse-dlopen
+    - TARGET=i686-unknown-linux-gnu
+    - FEATURES=pulse-dlopen
     addons: *apt_32
   - rust: stable
     env:
-      - TARGET=i686-unknown-linux-gnu
+    - TARGET=i686-unknown-linux-gnu
     addons: *apt_32
   - rust: stable
     env:
-      - TARGET=i686-unknown-linux-gnu
-      - FEATURES=pulse-dlopen
+    - TARGET=i686-unknown-linux-gnu
+    - FEATURES=pulse-dlopen
     addons: *apt_32
   - rust: nightly
     env:
-      - TARGET=i686-unknown-linux-gnu
+    - TARGET=i686-unknown-linux-gnu
     addons: *apt_32
   - rust: nightly
     env:
-      - TARGET=i686-unknown-linux-gnu
-        - FEATURES=pulse-dlopen
+    - TARGET=i686-unknown-linux-gnu
+    - FEATURES=pulse-dlopen
     addons: *apt_32
   allow_failures:
   - rust: nightly
