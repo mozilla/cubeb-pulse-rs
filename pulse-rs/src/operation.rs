@@ -9,10 +9,6 @@ use ffi;
 pub struct Operation(*mut ffi::pa_operation);
 
 impl Operation {
-    pub unsafe fn from_raw_ptr(raw: *mut ffi::pa_operation) -> Operation {
-        return Operation(raw);
-    }
-
     pub fn cancel(&mut self) {
         unsafe {
             ffi::pa_operation_cancel(self.0);
