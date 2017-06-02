@@ -145,7 +145,7 @@ impl Stream {
         error_result!((data, length), r)
     }
 
-    pub fn drop_record(&self) -> Result<()> {
+    pub fn drop(&self) -> Result<()> {
         let r = unsafe { ffi::pa_stream_drop(self.raw_mut()) };
         error_result!((), r)
     }
