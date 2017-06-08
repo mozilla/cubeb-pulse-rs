@@ -188,6 +188,27 @@ impl Context {
         unsafe { ffi::pa_context_rttime_new(self.raw_mut(), usec, Some(wrapped::<CB>), userdata) }
     }
 
+    pub fn get_server_info<CB>(&self, cb: CB) -> Result<Operation>
+        where CB: FnMut(&Context, Option<&ServerInfo>)
+    {
+
+        unsafe extern "C" fn wrapped(c: *mut ffi::pa_context, i: *const ffi::pa_server_info, userdata: *mut c_void) {
+            use std::mem::{forget, transmute};
+            let closure: &mut Box<FnMut(&Context, Option<&ServerInfo>)> = transmute(userdata);
+
+            let info = if i.is_null() { None } else { Some(&*i) };
+            let ctx = context::from_raw_ptr(c);
+            closure(&ctx, info);
+            forget(ctx);
+        }
+
+        let closure: Box<Box<FnMut(&Context, Option<&ServerInfo>)>> = Box::new(Box::new(cb));
+        let userdata = Box::into_raw(closure) as *mut c_void;
+
+        op_or_err!(self,
+                   ffi::pa_context_get_server_info(self.raw_mut(), Some(wrapped), userdata))
+    }
+    /*
     pub fn get_server_info<CB>(&self, _: CB, userdata: *mut c_void) -> Result<Operation>
         where CB: Fn(&Context, &ServerInfo, *mut c_void)
     {
@@ -210,8 +231,30 @@ impl Context {
         op_or_err!(self,
                    ffi::pa_context_get_server_info(self.raw_mut(), Some(wrapped::<CB>), userdata))
     }
+*/
 
-    pub fn get_sink_info_by_name<CB>(&self, name: &CStr, _: CB, userdata: *mut c_void) -> Result<Operation>
+    pub fn get_sink_info_by_name(&self,
+                                 name: &CStr,
+                                 mut cb: &FnMut(&Context, Option<&SinkInfo>, i32))
+                                 -> Result<Operation> {
+        unsafe extern "C" fn wrapped(c: *mut ffi::pa_context,
+                                     info: *const ffi::pa_sink_info,
+                                     eol: c_int,
+                                     userdata: *mut c_void) {
+            use std::mem::{forget, transmute};
+            let ctx = context::from_raw_ptr(c);
+            let info = if info.is_null() { None } else { Some(&*info) };
+            let closure: &mut &mut FnMut(&Context, Option<&SinkInfo>, i32) = transmute(userdata);
+            closure(&ctx, info, eol);
+            forget(ctx);
+        }
+
+        let closure = &mut cb as *mut _ as *mut c_void;
+        op_or_err!(self,
+                   ffi::pa_context_get_sink_info_by_name(self.raw_mut(), name.as_ptr(), Some(wrapped), closure))
+    }
+
+    /*    pub fn get_sink_info_by_name<CB>(&self, name: &CStr, _: CB, userdata: *mut c_void) -> Result<Operation>
         where CB: Fn(&Context, *const SinkInfo, i32, *mut c_void)
     {
         debug_assert_eq!(::std::mem::size_of::<CB>(), 0);
@@ -234,7 +277,7 @@ impl Context {
         op_or_err!(self,
                    ffi::pa_context_get_sink_info_by_name(self.raw_mut(), name.as_ptr(), Some(wrapped::<CB>), userdata))
     }
-
+*/
     pub fn get_sink_info_list<CB>(&self, _: CB, userdata: *mut c_void) -> Result<Operation>
         where CB: Fn(&Context, *const SinkInfo, i32, *mut c_void)
     {

@@ -51,10 +51,21 @@ pub struct DefaultInfo {
     pub flags: pulse::SinkFlags,
 }
 
+impl DefaultInfo {
+    pub fn new(info: &pulse::SinkInfo) -> Self {
+        let flags = pulse::SinkFlags::try_from(info.flags).expect("SinkInfo contains invalid flags");
+        DefaultInfo {
+            sample_spec: info.sample_spec,
+            channel_map: info.channel_map,
+            flags: flags,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Context {
     pub ops: *const cubeb::Ops,
-    pub mainloop: pulse::ThreadedMainloop,
+    pub mainloop: Option<pulse::ThreadedMainloop>,
     pub context: Option<pulse::Context>,
     pub default_sink_info: Option<DefaultInfo>,
     pub context_name: Option<CString>,
@@ -115,26 +126,6 @@ impl Context {
     }
 
     pub fn new(name: *const c_char) -> Result<Box<Self>> {
-        fn server_info_cb(context: &pulse::Context, info: &pulse::ServerInfo, u: *mut c_void) {
-            fn sink_info_cb(_: &pulse::Context, i: *const pulse::SinkInfo, eol: i32, u: *mut c_void) {
-                let mut ctx = unsafe { &mut *(u as *mut Context) };
-                if eol == 0 {
-                    let info = unsafe { &*i };
-                    let flags = pulse::SinkFlags::try_from(info.flags).expect("SinkInfo contains invalid flags");
-                    ctx.default_sink_info = Some(DefaultInfo {
-                                                     sample_spec: info.sample_spec,
-                                                     channel_map: info.channel_map,
-                                                     flags: flags,
-                                                 });
-                }
-                ctx.mainloop.signal();
-            }
-
-            let _ = context.get_sink_info_by_name(unsafe { CStr::from_ptr(info.default_sink_name) },
-                                                  sink_info_cb,
-                                                  u);
-        }
-
         let name = if name.is_null() {
             None
         } else {
@@ -153,15 +144,31 @@ impl Context {
         }
 
         ctx.mainloop.lock();
+        let mut default_sink_info: Option<DefaultInfo> = None;
         /* server_info_callback performs a second async query,
          * which is responsible for initializing default_sink_info
          * and signalling the mainloop to end the wait. */
-        let user_data: *mut c_void = ctx.as_mut() as *mut _ as *mut _;
         if let Some(ref context) = ctx.context {
-            if let Ok(o) = context.get_server_info(server_info_cb, user_data) {
+            let mut name: CString = Default::default();
+            if let Ok(o) = context.get_server_info(|_, info| if let Some(ref info) = info {
+                                                       name = unsafe { CStr::from_ptr(info.default_sink_name) }
+                                                           .to_owned();
+                                                       ctx.mainloop.signal();
+                                                   }) {
+                ctx.operation_wait(None, &o);
+            }
+
+            if let Ok(o) = context.get_sink_info_by_name(name.as_ref(),
+                                                         &mut |_, info, _| {
+                                                                  if let Some(ref info) = info {
+                                                                      default_sink_info = Some(DefaultInfo::new(info));
+                                                                  }
+                                                                  ctx.mainloop.signal();
+                                                              }) {
                 ctx.operation_wait(None, &o);
             }
         }
+        ctx.default_sink_info = default_sink_info;
         assert!(ctx.default_sink_info.is_some());
         ctx.mainloop.unlock();
 
@@ -345,21 +352,18 @@ impl Context {
             ctx.mainloop.signal();
         }
 
-        fn default_device_names(_: &pulse::Context, info: &pulse::ServerInfo, user_data: *mut c_void) {
-            let list_data = unsafe { &mut *(user_data as *mut PulseDevListData) };
-
-            list_data.default_sink_name = unsafe { CStr::from_ptr(info.default_sink_name) }.to_owned();
-            list_data.default_source_name = unsafe { CStr::from_ptr(info.default_source_name) }.to_owned();
-
-            (*list_data.context).mainloop.signal();
-        }
-
         let mut user_data = PulseDevListData::new(self);
 
         if let Some(ref context) = self.context {
             self.mainloop.lock();
 
-            if let Ok(o) = context.get_server_info(default_device_names, &mut user_data as *mut _ as *mut _) {
+            if let Ok(o) = context.get_server_info(|_, info| {
+                if let Some(ref info) = info {
+                    user_data.default_sink_name = unsafe { CStr::from_ptr(info.default_sink_name) }.to_owned();
+                    user_data.default_source_name = unsafe { CStr::from_ptr(info.default_source_name) }.to_owned();
+                }
+                self.mainloop.signal();
+            }) {
                 self.operation_wait(None, &o);
             }
 
