@@ -81,6 +81,22 @@ fn layout_to_channel_map(layout: ChannelLayout) -> pulse::ChannelMap {
     cm
 }
 
+fn default_layout_for_channels(ch: u32) -> ChannelLayout {
+    match ch {
+        1 => ChannelLayout::MONO,
+        2 => ChannelLayout::STEREO,
+        3 => ChannelLayout::_3F,
+        4 => ChannelLayout::QUAD,
+        5 => ChannelLayout::_3F2,
+        6 => ChannelLayout::_3F_LFE
+             | ChannelLayout::SIDE_LEFT
+             | ChannelLayout::SIDE_RIGHT,
+        7 => ChannelLayout::_3F3R_LFE,
+        8 => ChannelLayout::_3F4_LFE,
+        _ => panic!("channel must be between 1 to 8.")
+    }
+}
+
 pub struct Device(ffi::cubeb_device);
 
 impl Drop for Device {
@@ -629,22 +645,6 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
     }
 }
 
-fn default_layout_for_channels(ch: u32) -> ChannelLayout {
-    match ch {
-        1 => ChannelLayout::MONO,
-        2 => ChannelLayout::STEREO,
-        3 => ChannelLayout::_3F,
-        4 => ChannelLayout::QUAD,
-        5 => ChannelLayout::_3F2,
-        6 => ChannelLayout::_3F_LFE
-             | ChannelLayout::SIDE_LEFT
-             | ChannelLayout::SIDE_RIGHT,
-        7 => ChannelLayout::_3F3R_LFE,
-        8 => ChannelLayout::_3F4_LFE,
-        _ => panic!("channel must be between 1 to 8.")
-    }
-}
-
 impl<'ctx> PulseStream<'ctx> {
     fn stream_init(
         context: &pulse::Context,
@@ -679,7 +679,7 @@ impl<'ctx> PulseStream<'ctx> {
         let cm: Option<pa_channel_map> = match stream_params.layout() {
             ChannelLayout::UNDEFINED =>
                 if stream_params.channels() <= 8
-                  && !pulse::ChannelMap::init_auto(stream_params.channels(), PA_CHANNEL_MAP_DEFAULT) {
+                  && pulse::ChannelMap::init_auto(stream_params.channels(), PA_CHANNEL_MAP_DEFAULT).is_none() {
                     cubeb_log!("Layout undefined and PulseAudio's default layout has not been configured, guess one.");
                     Some(layout_to_channel_map(default_layout_for_channels(stream_params.channels())))
                 } else {
