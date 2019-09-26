@@ -131,7 +131,7 @@ impl PulseContext {
         }
 
         let name = name.map(|s| s.to_owned());
-        let mut ctx = try!(PulseContext::_new(name));
+        let mut ctx = PulseContext::_new(name)?;
 
         if ctx.mainloop.start().is_err() {
             ctx.destroy();
@@ -170,7 +170,7 @@ impl PulseContext {
 
 impl ContextOps for PulseContext {
     fn init(context_name: Option<&CStr>) -> Result<Context> {
-        let ctx = try!(PulseContext::new(context_name));
+        let ctx = PulseContext::new(context_name)?;
         Ok(unsafe { Context::from_ptr(Box::into_raw(ctx) as *mut _) })
     }
 
@@ -428,10 +428,10 @@ impl ContextOps for PulseContext {
         user_ptr: *mut c_void,
     ) -> Result<Stream> {
         if self.error {
-            let _ = try!(self.context_init());
+            let _ = self.context_init()?;
         }
 
-        let stm = try!(PulseStream::new(
+        let stm = PulseStream::new(
             self,
             stream_name,
             input_device,
@@ -442,7 +442,7 @@ impl ContextOps for PulseContext {
             data_callback,
             state_callback,
             user_ptr,
-        ));
+        )?;
         Ok(unsafe { Stream::from_ptr(Box::into_raw(stm) as *mut _) })
     }
 
