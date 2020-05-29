@@ -379,14 +379,14 @@ impl<'ctx> PulseStream<'ctx> {
                         s.set_state_callback(check_error, stm.as_mut() as *mut _ as *mut _);
                         s.set_write_callback(write_data, stm.as_mut() as *mut _ as *mut _);
 
-                        let buffer_size_bytes = latency_frames * stm.output_sample_spec.frame_size() as u32;
+                        let buffer_size_bytes = USecExt::to_bytes(latency_frames as u64, &stm.output_sample_spec) as u32;
 
                         let battr = pa_buffer_attr {
                             maxlength: u32::max_value(),
                             prebuf: u32::max_value(),
-                            fragsize: u32::max_value(),
-                            tlength: buffer_size_bytes * 2,
-                            minreq: buffer_size_bytes / 4
+                            fragsize: buffer_size_bytes,
+                            tlength: buffer_size_bytes,
+                            minreq: u32::max_value()
                         };
                         let device_name = super::try_cstr_from(output_device as *const _);
                         let mut stream_flags = pulse::StreamFlags::AUTO_TIMING_UPDATE
@@ -426,13 +426,13 @@ impl<'ctx> PulseStream<'ctx> {
                         s.set_state_callback(check_error, stm.as_mut() as *mut _ as *mut _);
                         s.set_read_callback(read_data, stm.as_mut() as *mut _ as *mut _);
 
-                        let buffer_size_bytes = latency_frames * stm.input_sample_spec.frame_size() as u32;
+                        let buffer_size_bytes = USecExt::to_bytes(latency_frames as u64, &stm.input_sample_spec) as u32;
                         let battr = pa_buffer_attr {
                             maxlength: u32::max_value(),
                             prebuf: u32::max_value(),
                             fragsize: buffer_size_bytes,
                             tlength: buffer_size_bytes,
-                            minreq: buffer_size_bytes
+                            minreq: u32::max_value()
                         };
                         let device_name = super::try_cstr_from(input_device as *const _);
                         let mut stream_flags = pulse::StreamFlags::AUTO_TIMING_UPDATE
