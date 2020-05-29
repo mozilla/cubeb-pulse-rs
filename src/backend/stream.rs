@@ -646,13 +646,11 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
         match self.input_stream {
             None => Err(Error::error()),
             Some(ref stm) => match stm.get_latency() {
-                Ok(StreamLatency::Positive(w_usec)) => {
+                  Ok(StreamLatency::Positive(w_usec))
+                | Ok(StreamLatency::Negative(w_usec)) => {
                     let latency = (w_usec * pa_usec_t::from(self.input_sample_spec.rate)
                         / PA_USEC_PER_SEC) as u32;
                     Ok(latency)
-                }
-                Ok(_) => {
-                    panic!("Can not handle negative latency values.");
                 }
                 Err(_) => Err(Error::error()),
             },
