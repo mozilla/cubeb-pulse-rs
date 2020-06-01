@@ -379,7 +379,7 @@ impl<'ctx> PulseStream<'ctx> {
                         s.set_state_callback(check_error, stm.as_mut() as *mut _ as *mut _);
                         s.set_write_callback(write_data, stm.as_mut() as *mut _ as *mut _);
 
-                        let buffer_size_bytes = USecExt::to_bytes(latency_frames as u64, &stm.output_sample_spec) as u32;
+                        let buffer_size_bytes = latency_frames * stm.output_sample_spec.frame_size() as u32;
 
                         let battr = pa_buffer_attr {
                             maxlength: u32::max_value(),
@@ -426,7 +426,7 @@ impl<'ctx> PulseStream<'ctx> {
                         s.set_state_callback(check_error, stm.as_mut() as *mut _ as *mut _);
                         s.set_read_callback(read_data, stm.as_mut() as *mut _ as *mut _);
 
-                        let buffer_size_bytes = USecExt::to_bytes(latency_frames as u64, &stm.input_sample_spec) as u32;
+                        let buffer_size_bytes = latency_frames * stm.input_sample_spec.frame_size() as u32;
                         let battr = pa_buffer_attr {
                             maxlength: u32::max_value(),
                             prebuf: u32::max_value(),
