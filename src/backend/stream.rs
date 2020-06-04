@@ -13,6 +13,7 @@ use std::{mem, ptr};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_long, c_void};
 use std::slice;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ringbuf::RingBuffer;
 
 use self::RingBufferConsumer::*;
@@ -242,6 +243,8 @@ pub struct PulseStream<'ctx> {
     drain_timer: *mut pa_time_event,
     output_sample_spec: pulse::SampleSpec,
     input_sample_spec: pulse::SampleSpec,
+    output_frame_count: AtomicUsize,
+    input_frame_count: AtomicUsize,
     shutdown: bool,
     volume: f32,
     state: ffi::cubeb_state,
@@ -296,6 +299,7 @@ impl<'ctx> PulseStream<'ctx> {
                 if !read_data.is_null() {
                     let in_frame_size = stm.input_sample_spec.frame_size();
                     let read_frames = read_size / in_frame_size;
+                    *stm.input_frame_count.get_mut() += read_frames;
                     let read_samples = read_size / stm.input_sample_spec.sample_size();
 
                     if stm.output_stream.is_some() {
@@ -341,6 +345,17 @@ impl<'ctx> PulseStream<'ctx> {
             if stm.input_stream.is_some() {
                 let nframes = nbytes / stm.output_sample_spec.frame_size();
                 let nsamples_input = nframes * stm.input_sample_spec.channels as usize;
+                let val = stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst);
+                if val == 0 {
+                    let input_fc = stm.input_frame_count.load(Ordering::SeqCst);
+                    if input_fc > nframes {
+                        // The ringbuffer contains old data
+                        // Remove them to decrease initial latency
+                        let nframes_to_drop = input_fc - nframes;
+                        cubeb_logv!("Dropping {} frames in the buffer", nframes_to_drop);
+                        stm.input_buffer_manager.as_mut().unwrap().get_linear_input_data(nframes_to_drop);
+                    }
+                }
                 let p = stm.input_buffer_manager.as_mut().unwrap().get_linear_input_data(nsamples_input);
                 stm.trigger_user_callback(p, nbytes);
             } else {
@@ -361,6 +376,8 @@ impl<'ctx> PulseStream<'ctx> {
             drain_timer: ptr::null_mut(),
             output_sample_spec: pulse::SampleSpec::default(),
             input_sample_spec: pulse::SampleSpec::default(),
+            output_frame_count: AtomicUsize::new(0),
+            input_frame_count: AtomicUsize::new(0),
             shutdown: false,
             volume: PULSE_NO_GAIN,
             state: ffi::CUBEB_STATE_ERROR,
