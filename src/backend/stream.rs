@@ -223,6 +223,23 @@ impl BufferManager {
 
         return p;
     }
+
+    pub fn trim(&mut self, final_size: usize) {
+        match self.consumer {
+            LinearInputBuffer::IntegerLinearInputBuffer(b) {
+                let length = b.len();
+                assert!(final_size < length);
+                let nframes_to_pop = length - final_size;
+                b.get_linear_input_data(nframes_to_pop);
+            }
+            LinearInputBuffer::FloatLinearInputBuffer(b) {
+                let length = b.len();
+                assert!(final_size < length);
+                let nframes_to_pop = length - final_size;
+                b.get_linear_input_data(nframes_to_pop);
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for BufferManager {
@@ -345,15 +362,18 @@ impl<'ctx> PulseStream<'ctx> {
             if stm.input_stream.is_some() {
                 let nframes = nbytes / stm.output_sample_spec.frame_size();
                 let nsamples_input = nframes * stm.input_sample_spec.channels as usize;
-                let val = stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst);
-                if val == 0 {
-                    let input_fc = stm.input_frame_count.load(Ordering::SeqCst);
-                    if input_fc > nframes {
+                let input_frames_needed = stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst);
+                if input_frames_needed == 0 {
+                    let buffered_input_frames = stm.input_frame_count.load(Ordering::SeqCst);
+                    if buffered_input_frames > nframes {
                         // The ringbuffer contains old data
                         // Remove them to decrease initial latency
-                        let nframes_to_drop = input_fc - nframes;
-                        cubeb_logv!("Dropping {} frames in the buffer", nframes_to_drop);
-                        stm.input_buffer_manager.as_mut().unwrap().get_linear_input_data(nframes_to_drop);
+                        let input_buffer_manager = stm.input_buffer_manager.as_mut().unwrap();
+                        let popped_frames = buffered_input_frames - nframes;
+                        input_buffer_manager.trim(input_frames_needed);
+                        stm.input_frame_count.fetch_sub(popped_frames, Ordering::SeqCst);
+
+                        cubeb_log!("Dropping {} frames in input buffer.", popped_frames);
                     }
                 }
                 let p = stm.input_buffer_manager.as_mut().unwrap().get_linear_input_data(nsamples_input);
