@@ -651,7 +651,8 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
                         / PA_USEC_PER_SEC) as u32;
                     Ok(latency)
                 }
-                // Pulse latency can be negative in case we're recording
+                // Input stream can be negative only if it is attached to a
+                // monitor source device
                 Ok(StreamLatency::Negative(_)) => {
                     return Ok(0);
                 }
