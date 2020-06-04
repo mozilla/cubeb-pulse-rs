@@ -225,18 +225,18 @@ impl BufferManager {
     }
 
     pub fn trim(&mut self, final_size: usize) {
-        match self.consumer {
-            LinearInputBuffer::IntegerLinearInputBuffer(b) {
+        match &self.linear_input_buffer {
+            LinearInputBuffer::IntegerLinearInputBuffer(b) => {
                 let length = b.len();
                 assert!(final_size < length);
                 let nframes_to_pop = length - final_size;
-                b.get_linear_input_data(nframes_to_pop);
+                self.get_linear_input_data(nframes_to_pop);
             }
-            LinearInputBuffer::FloatLinearInputBuffer(b) {
+            LinearInputBuffer::FloatLinearInputBuffer(b) => {
                 let length = b.len();
                 assert!(final_size < length);
                 let nframes_to_pop = length - final_size;
-                b.get_linear_input_data(nframes_to_pop);
+                self.get_linear_input_data(nframes_to_pop);
             }
         }
     }
