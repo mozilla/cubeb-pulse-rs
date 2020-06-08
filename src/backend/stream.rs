@@ -362,15 +362,13 @@ impl<'ctx> PulseStream<'ctx> {
             if stm.input_stream.is_some() {
                 let nframes = nbytes / stm.output_sample_spec.frame_size();
                 let nsamples_input = nframes * stm.input_sample_spec.channels as usize;
-                let input_frames_needed = stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst);
-                if input_frames_needed == 0 {
+                if stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst) == 0 {
                     let buffered_input_frames = stm.input_frame_count.load(Ordering::SeqCst);
                     if buffered_input_frames > nframes {
-                        // The ringbuffer contains old data
-                        // Remove them to decrease initial latency
+                        // Trim the buffer to ensure minimal roundtrip latency
                         let input_buffer_manager = stm.input_buffer_manager.as_mut().unwrap();
                         let popped_frames = buffered_input_frames - nframes;
-                        input_buffer_manager.trim(input_frames_needed);
+                        input_buffer_manager.trim(nframes);
                         stm.input_frame_count.fetch_sub(popped_frames, Ordering::SeqCst);
 
                         cubeb_log!("Dropping {} frames in input buffer.", popped_frames);
