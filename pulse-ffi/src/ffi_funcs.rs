@@ -154,6 +154,11 @@ mod static_fns {
                                offset: i64,
                                seek: pa_seek_mode_t)
                                -> c_int;
+        pub fn pa_stream_set_name(s: *mut pa_stream, 
+                                  name: *const c_char,
+                                  cb: pa_stream_success_cb_t,
+                                  userdata: *mut c_void)
+                                  -> *mut pa_operation;	
         pub fn pa_sw_volume_from_linear(v: c_double) -> pa_volume_t;
         pub fn pa_threaded_mainloop_free(m: *mut pa_threaded_mainloop);
         pub fn pa_threaded_mainloop_get_api(m: *mut pa_threaded_mainloop) -> *mut pa_mainloop_api;
