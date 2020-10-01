@@ -744,6 +744,24 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
         }
     }
 
+    fn set_name(&mut self, name: &CStr) -> Result<()> {
+        match self.output_stream {
+            None => Err(Error::error()),
+            Some(ref stm) => {
+                self.context.mainloop.lock();
+                    if let Ok(o) = stm.set_name(
+                        name,
+                        stream_success,
+                        self as *const _ as *mut _
+                    ) {
+                        self.context.operation_wait(stm, &o);
+                    }
+                self.context.mainloop.unlock();
+                Ok(())
+            }
+        }
+    }
+
     fn current_device(&mut self) -> Result<&DeviceRef> {
         if self.context.version_0_9_8 {
             let mut dev: Box<ffi::cubeb_device> = Box::new(unsafe { mem::zeroed() });
