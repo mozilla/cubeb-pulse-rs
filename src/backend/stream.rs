@@ -228,15 +228,25 @@ impl BufferManager {
         match &self.linear_input_buffer {
             LinearInputBuffer::IntegerLinearInputBuffer(b) => {
                 let length = b.len();
-                assert!(final_size < length);
+                assert!(final_size <= length);
                 let nframes_to_pop = length - final_size;
                 self.get_linear_input_data(nframes_to_pop);
             }
             LinearInputBuffer::FloatLinearInputBuffer(b) => {
                 let length = b.len();
-                assert!(final_size < length);
+                assert!(final_size <= length);
                 let nframes_to_pop = length - final_size;
                 self.get_linear_input_data(nframes_to_pop);
+            }
+        }
+    }
+    pub fn available_samples(&mut self) -> usize {
+        match &self.linear_input_buffer {
+            LinearInputBuffer::IntegerLinearInputBuffer(b) => {
+                b.len()
+            }
+            LinearInputBuffer::FloatLinearInputBuffer(b) => {
+                b.len()
             }
         }
     }
@@ -261,7 +271,6 @@ pub struct PulseStream<'ctx> {
     output_sample_spec: pulse::SampleSpec,
     input_sample_spec: pulse::SampleSpec,
     output_frame_count: AtomicUsize,
-    input_frame_count: AtomicUsize,
     shutdown: bool,
     volume: f32,
     state: ffi::cubeb_state,
@@ -316,7 +325,6 @@ impl<'ctx> PulseStream<'ctx> {
                 if !read_data.is_null() {
                     let in_frame_size = stm.input_sample_spec.frame_size();
                     let read_frames = read_size / in_frame_size;
-                    *stm.input_frame_count.get_mut() += read_frames;
                     let read_samples = read_size / stm.input_sample_spec.sample_size();
 
                     if stm.output_stream.is_some() {
@@ -362,19 +370,19 @@ impl<'ctx> PulseStream<'ctx> {
             if stm.input_stream.is_some() {
                 let nframes = nbytes / stm.output_sample_spec.frame_size();
                 let nsamples_input = nframes * stm.input_sample_spec.channels as usize;
+                let input_buffer_manager = stm.input_buffer_manager.as_mut().unwrap();
+
                 if stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst) == 0 {
-                    let buffered_input_frames = stm.input_frame_count.load(Ordering::SeqCst);
+                    let buffered_input_frames = input_buffer_manager.available_samples() / stm.input_sample_spec.channels as usize;
                     if buffered_input_frames > nframes {
                         // Trim the buffer to ensure minimal roundtrip latency
-                        let input_buffer_manager = stm.input_buffer_manager.as_mut().unwrap();
                         let popped_frames = buffered_input_frames - nframes;
-                        input_buffer_manager.trim(nframes);
-                        stm.input_frame_count.fetch_sub(popped_frames, Ordering::SeqCst);
-
+                        input_buffer_manager.trim(nframes * stm.input_sample_spec.channels as usize);
                         cubeb_log!("Dropping {} frames in input buffer.", popped_frames);
                     }
                 }
-                let p = stm.input_buffer_manager.as_mut().unwrap().get_linear_input_data(nsamples_input);
+
+                let p = input_buffer_manager.get_linear_input_data(nsamples_input);
                 stm.trigger_user_callback(p, nbytes);
             } else {
                 // Output/playback only operation.
@@ -395,7 +403,6 @@ impl<'ctx> PulseStream<'ctx> {
             output_sample_spec: pulse::SampleSpec::default(),
             input_sample_spec: pulse::SampleSpec::default(),
             output_frame_count: AtomicUsize::new(0),
-            input_frame_count: AtomicUsize::new(0),
             shutdown: false,
             volume: PULSE_NO_GAIN,
             state: ffi::CUBEB_STATE_ERROR,
