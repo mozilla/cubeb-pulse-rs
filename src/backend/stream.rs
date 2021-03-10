@@ -274,7 +274,8 @@ pub struct PulseStream<'ctx> {
     shutdown: bool,
     volume: f32,
     state: ffi::cubeb_state,
-    input_buffer_manager: Option<BufferManager>
+    input_buffer_manager: Option<BufferManager>,
+    frames_per_bloc: usize
 }
 
 impl<'ctx> PulseStream<'ctx> {
@@ -315,6 +316,11 @@ impl<'ctx> PulseStream<'ctx> {
             cubeb_logv!("Input callback buffer size {}", nbytes);
             let stm = unsafe { &mut *(u as *mut PulseStream) };
             if stm.shutdown {
+                return;
+            }
+
+            let nbytes = nbytes - (nbytes % (stm.frames_per_bloc * stm.input_sample_spec.frame_size()));
+            if nbytes == 0 {
                 return;
             }
 
@@ -366,7 +372,10 @@ impl<'ctx> PulseStream<'ctx> {
             if stm.shutdown || stm.state != ffi::CUBEB_STATE_STARTED {
                 return;
             }
-
+            let nbytes = nbytes - (nbytes % (stm.frames_per_bloc * stm.output_sample_spec.frame_size()));
+            if nbytes == 0 {
+                return;
+            }
             if stm.input_stream.is_some() {
                 let nframes = nbytes / stm.output_sample_spec.frame_size();
                 let nsamples_input = nframes * stm.input_sample_spec.channels as usize;
@@ -406,7 +415,8 @@ impl<'ctx> PulseStream<'ctx> {
             shutdown: false,
             volume: PULSE_NO_GAIN,
             state: ffi::CUBEB_STATE_ERROR,
-            input_buffer_manager: None
+            input_buffer_manager: None,
+            frames_per_bloc: 128
         });
 
         if let Some(ref context) = stm.context.context {
