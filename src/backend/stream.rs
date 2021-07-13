@@ -425,7 +425,7 @@ impl<'ctx> PulseStream<'ctx> {
 
                         let battr = pa_buffer_attr {
                             maxlength: u32::max_value(),
-                            prebuf: u32::max_value(),
+                            prebuf: 0,
                             fragsize: u32::max_value(),
                             tlength: buffer_size_bytes * 2,
                             minreq: buffer_size_bytes / 4
@@ -593,30 +593,8 @@ impl<'ctx> Drop for PulseStream<'ctx> {
 
 impl<'ctx> StreamOps for PulseStream<'ctx> {
     fn start(&mut self) -> Result<()> {
-        fn output_preroll(_: &pulse::MainloopApi, u: *mut c_void) {
-            let stm = unsafe { &mut *(u as *mut PulseStream) };
-            if !stm.shutdown {
-                let size = stm.output_stream
-                    .as_ref()
-                    .map_or(0, |s| s.writable_size().unwrap_or(0));
-                stm.trigger_user_callback(std::ptr::null(), size);
-            }
-        }
-
         self.shutdown = false;
         self.cork(CorkState::uncork() | CorkState::notify());
-
-        if self.output_stream.is_some() {
-            /* When doing output-only or duplex, we need to manually call user cb once in order to
-             * make things roll. This is done via a defer event in order to execute it from PA
-             * server thread. */
-            self.context.mainloop.lock();
-            self.context
-                .mainloop
-                .get_api()
-                .once(output_preroll, self as *const _ as *mut _);
-            self.context.mainloop.unlock();
-        }
 
         Ok(())
     }
@@ -626,9 +604,11 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
             self.context.mainloop.lock();
             self.shutdown = true;
             // If draining is taking place wait to finish
+            cubeb_log!("Stream stop: waiting for drain.");
             while !self.drain_timer.is_null() {
                 self.context.mainloop.wait();
             }
+            cubeb_log!("Stream stop: waited for drain.");
             self.context.mainloop.unlock();
         }
         self.cork(CorkState::cork() | CorkState::notify());
@@ -973,6 +953,7 @@ impl<'ctx> PulseStream<'ctx> {
             _tv: &pulse::TimeVal,
             u: *mut c_void,
         ) {
+            cubeb_logv!("Drain finished callback.");
             let stm = unsafe { &mut *(u as *mut PulseStream) };
             debug_assert_eq!(stm.drain_timer, e);
             stm.state_change_callback(ffi::CUBEB_STATE_DRAINED);
@@ -1053,6 +1034,7 @@ impl<'ctx> PulseStream<'ctx> {
                         debug_assert!(r.is_ok());
 
                         if (got as usize) < size / frame_size {
+                            cubeb_logv!("Draining {} < {}", got, size / frame_size);
                             let latency = match stm.get_latency() {
                                 Ok(StreamLatency::Positive(l)) => l,
                                 Ok(_) => {
