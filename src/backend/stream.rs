@@ -310,7 +310,7 @@ impl<'ctx> PulseStream<'ctx> {
                 buffer: *mut *const c_void,
                 size: *mut usize,
             ) -> i32 {
-                let readable_size: i32 = s.readable_size().and_then(|s| Ok(s as i32)).unwrap_or(-1);
+                let readable_size = s.readable_size().map(|s| s as i32).unwrap_or(-1);
                 if readable_size > 0 && unsafe { s.peek(buffer, size).is_err() } {
                     return -1;
                 }
