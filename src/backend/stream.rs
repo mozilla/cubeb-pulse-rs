@@ -992,8 +992,7 @@ impl<'ctx> PulseStream<'ctx> {
                             size,
                             read_offset
                         );
-                        let read_ptr =
-                            unsafe { (input_data as *const u8).offset(read_offset as isize) };
+                        let read_ptr = unsafe { (input_data as *const u8).add(read_offset) };
                         let got = unsafe {
                             self.data_callback.unwrap()(
                                 self as *const _ as *mut _,
