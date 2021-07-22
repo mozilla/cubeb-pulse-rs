@@ -283,7 +283,7 @@ pub struct PulseStream<'ctx> {
 }
 
 impl<'ctx> PulseStream<'ctx> {
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
     pub fn new(
         context: &'ctx PulseContext,
         stream_name: Option<&CStr>,
