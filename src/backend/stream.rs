@@ -153,23 +153,23 @@ impl BufferManager {
         if sample_spec.format == PA_SAMPLE_S16BE || sample_spec.format == PA_SAMPLE_S16LE {
             let ring = RingBuffer::<i16>::new(input_buffer_size);
             let (prod, cons) = ring.split();
-            return BufferManager {
+            BufferManager {
                 producer: IntegerRingBufferProducer(prod),
                 consumer: IntegerRingBufferConsumer(cons),
                 linear_input_buffer: IntegerLinearInputBuffer(Vec::<i16>::with_capacity(
                     input_buffer_size,
                 )),
-            };
+            }
         } else {
             let ring = RingBuffer::<f32>::new(input_buffer_size);
             let (prod, cons) = ring.split();
-            return BufferManager {
+            BufferManager {
                 producer: FloatRingBufferProducer(prod),
                 consumer: FloatRingBufferConsumer(cons),
                 linear_input_buffer: FloatLinearInputBuffer(Vec::<f32>::with_capacity(
                     input_buffer_size,
                 )),
-            };
+            }
         }
     }
 
@@ -230,7 +230,7 @@ impl BufferManager {
         }
         self.pull_input_data(p, nsamples);
 
-        return p;
+        p
     }
 
     pub fn trim(&mut self, final_size: usize) {
@@ -679,9 +679,7 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
                 }
                 // Input stream can be negative only if it is attached to a
                 // monitor source device
-                Ok(StreamLatency::Negative(_)) => {
-                    return Ok(0);
-                }
+                Ok(StreamLatency::Negative(_)) => Ok(0),
                 Err(_) => Err(Error::error()),
             },
         }
