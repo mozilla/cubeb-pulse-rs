@@ -501,7 +501,7 @@ impl ContextOps for PulseContext {
         Ok(())
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
     fn stream_init(
         &mut self,
         stream_name: Option<&CStr>,
