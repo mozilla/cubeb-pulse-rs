@@ -586,10 +586,7 @@ impl PulseContext {
         }
 
         self.context = {
-            let name = match self.context_name.as_ref() {
-                Some(s) => Some(s.as_ref()),
-                None => None,
-            };
+            let name = self.context_name.as_ref().map(|s| s.as_ref());
             pulse::Context::new(&self.mainloop.get_api(), name)
         };
 
