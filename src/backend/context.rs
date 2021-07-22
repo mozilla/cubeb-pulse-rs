@@ -103,7 +103,7 @@ impl PulseContext {
                 ctx.default_sink_info = Some(DefaultInfo {
                     sample_spec: info.sample_spec,
                     channel_map: info.channel_map,
-                    flags: flags,
+                    flags,
                 });
             }
             ctx.mainloop.signal();
@@ -330,14 +330,14 @@ impl ContextOps for PulseContext {
             let device_id = ctx.devids.borrow_mut().add(info_name);
             let friendly_name = info_description.into_raw();
             let devinfo = ffi::cubeb_device_info {
-                device_id: device_id,
+                device_id,
                 devid: device_id as ffi::cubeb_devid,
-                friendly_name: friendly_name,
-                group_id: group_id,
-                vendor_name: vendor_name,
+                friendly_name,
+                group_id,
+                vendor_name,
                 device_type: ffi::CUBEB_DEVICE_TYPE_OUTPUT,
                 state: ctx.state_from_port(info.active_port),
-                preferred: preferred,
+                preferred,
                 format: ffi::CUBEB_DEVICE_FMT_ALL,
                 default_format: pulse_format_to_cubeb_format(info.sample_spec.format),
                 max_channels: u32::from(info.channel_map.channels),
@@ -391,14 +391,14 @@ impl ContextOps for PulseContext {
             let device_id = ctx.devids.borrow_mut().add(info_name);
             let friendly_name = info_description.into_raw();
             let devinfo = ffi::cubeb_device_info {
-                device_id: device_id,
+                device_id,
                 devid: device_id as ffi::cubeb_devid,
-                friendly_name: friendly_name,
-                group_id: group_id,
-                vendor_name: vendor_name,
+                friendly_name,
+                group_id,
+                vendor_name,
                 device_type: ffi::CUBEB_DEVICE_TYPE_INPUT,
                 state: ctx.state_from_port(info.active_port),
-                preferred: preferred,
+                preferred,
                 format: ffi::CUBEB_DEVICE_FMT_ALL,
                 default_format: pulse_format_to_cubeb_format(info.sample_spec.format),
                 max_channels: u32::from(info.channel_map.channels),
@@ -718,7 +718,7 @@ impl<'a> PulseDevListData<'a> {
             default_sink_name: CString::default(),
             default_source_name: CString::default(),
             devinfo: Vec::new(),
-            context: context,
+            context,
         }
     }
 }

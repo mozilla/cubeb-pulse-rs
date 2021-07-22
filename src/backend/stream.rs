@@ -403,12 +403,12 @@ impl<'ctx> PulseStream<'ctx> {
         }
 
         let mut stm = Box::new(PulseStream {
-            context: context,
+            context,
             output_stream: None,
             input_stream: None,
-            data_callback: data_callback,
-            state_callback: state_callback,
-            user_ptr: user_ptr,
+            data_callback,
+            state_callback,
+            user_ptr,
             drain_timer: ptr::null_mut(),
             output_sample_spec: pulse::SampleSpec::default(),
             input_sample_spec: pulse::SampleSpec::default(),
