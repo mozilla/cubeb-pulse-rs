@@ -21,7 +21,7 @@ jobs:
         submodules: recursive
 
     - name: Install Rust
-      run: rustup toolchain install ${{ matrix.rust }} --profile minimal --component rustfmt
+      run: rustup toolchain install ${{ matrix.rust }} --profile minimal --component rustfmt clippy
 
     - name: Install Dependencies (Linux)
       run: sudo apt-get install libpulse-dev
