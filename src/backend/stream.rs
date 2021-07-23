@@ -466,7 +466,7 @@ impl<'ctx> PulseStream<'ctx> {
             }
 
             // Set up input stream
-            if let Some(ref stream_params) = input_stream_params {
+            if let Some(stream_params) = input_stream_params {
                 match PulseStream::stream_init(context, stream_params, stream_name) {
                     Ok(s) => {
                         stm.input_sample_spec = *s.get_sample_spec();
