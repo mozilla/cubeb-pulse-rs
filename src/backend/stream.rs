@@ -275,6 +275,7 @@ pub struct PulseStream<'ctx> {
     drain_timer: *mut pa_time_event,
     output_sample_spec: pulse::SampleSpec,
     input_sample_spec: pulse::SampleSpec,
+    // output frames count excluding pre-buffering
     output_frame_count: AtomicUsize,
     shutdown: bool,
     volume: f32,
@@ -375,8 +376,8 @@ impl<'ctx> PulseStream<'ctx> {
                 return;
             }
 
+            let nframes = nbytes / stm.output_sample_spec.frame_size();
             if stm.input_stream.is_some() {
-                let nframes = nbytes / stm.output_sample_spec.frame_size();
                 let nsamples_input = nframes * stm.input_sample_spec.channels as usize;
                 let input_buffer_manager = stm.input_buffer_manager.as_mut().unwrap();
 
@@ -395,6 +396,7 @@ impl<'ctx> PulseStream<'ctx> {
                 let p = input_buffer_manager.get_linear_input_data(nsamples_input);
                 stm.trigger_user_callback(p, nbytes);
             } else {
+                stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst);
                 // Output/playback only operation.
                 // Write directly to output
                 debug_assert!(stm.output_stream.is_some());
