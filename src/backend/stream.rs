@@ -1017,7 +1017,7 @@ impl<'ctx> PulseStream<'ctx> {
                             read_offset
                         );
                         let read_ptr = unsafe { (input_data as *const u8).add(read_offset) };
-                        let got = unsafe {
+                        let mut got = unsafe {
                             self.data_callback.unwrap()(
                                 self as *const _ as *mut _,
                                 self.user_ptr,
@@ -1057,15 +1057,40 @@ impl<'ctx> PulseStream<'ctx> {
                             }
                         }
 
+                        let should_drain = (got as usize) < size / frame_size;
+
+                        if should_drain && self.output_frame_count.load(Ordering::SeqCst) == 0 {
+                            // Draining during preroll, ensure `prebuf` frames are written so
+                            // the stream starts. If not, pad with a bit of silence.
+                            let prebuf_size_bytes = stm.get_buffer_attr().prebuf as usize;
+                            let got_bytes = got as usize * frame_size;
+                            if prebuf_size_bytes > got_bytes {
+                                let padding_bytes = prebuf_size_bytes - got_bytes;
+                                if padding_bytes + got_bytes <= size {
+                                    // A slice that starts after the data provided by the callback,
+                                    // with just enough room to provide a final buffer big enough.
+                                    let padding_buf: &mut [u8] = unsafe {
+                                        slice::from_raw_parts_mut::<u8>(
+                                            buffer.add(got_bytes) as *mut u8,
+                                            padding_bytes,
+                                        )
+                                    };
+                                    padding_buf.fill(0);
+                                    got += (padding_bytes / frame_size) as i64;
+                                }
+                            } else {
+                                cubeb_log!("Not enough room to pad up to prebuf when prebuffering.")
+                            }
+                        }
+
                         let r = stm.write(
                             buffer,
                             got as usize * frame_size,
                             0,
                             pulse::SeekMode::Relative,
                         );
-                        debug_assert!(r.is_ok());
 
-                        if (got as usize) < size / frame_size {
+                        if should_drain {
                             cubeb_logv!("Draining {} < {}", got, size / frame_size);
                             let latency = match stm.get_latency() {
                                 Ok(StreamLatency::Positive(l)) => l,
@@ -1096,6 +1121,8 @@ impl<'ctx> PulseStream<'ctx> {
                             self.shutdown = true;
                             return;
                         }
+
+                        debug_assert!(r.is_ok());
 
                         towrite -= size;
                     }
