@@ -377,11 +377,12 @@ impl<'ctx> PulseStream<'ctx> {
             }
 
             let nframes = nbytes / stm.output_sample_spec.frame_size();
+            let first_callback = stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst) == 0;
             if stm.input_stream.is_some() {
                 let nsamples_input = nframes * stm.input_sample_spec.channels as usize;
                 let input_buffer_manager = stm.input_buffer_manager.as_mut().unwrap();
 
-                if stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst) == 0 {
+                if first_callback {
                     let buffered_input_frames = input_buffer_manager.available_samples()
                         / stm.input_sample_spec.channels as usize;
                     if buffered_input_frames > nframes {
@@ -396,7 +397,6 @@ impl<'ctx> PulseStream<'ctx> {
                 let p = input_buffer_manager.get_linear_input_data(nsamples_input);
                 stm.trigger_user_callback(p, nbytes);
             } else {
-                stm.output_frame_count.fetch_add(nframes, Ordering::SeqCst);
                 // Output/playback only operation.
                 // Write directly to output
                 debug_assert!(stm.output_stream.is_some());
