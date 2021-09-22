@@ -1024,7 +1024,7 @@ impl<'ctx> PulseStream<'ctx> {
                                 read_ptr as *const _ as *mut _,
                                 buffer,
                                 (size / frame_size) as c_long,
-                            )
+                            ) as i64
                         };
                         if got < 0 {
                             let _ = stm.cancel_write();
