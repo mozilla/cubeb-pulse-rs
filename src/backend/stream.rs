@@ -192,10 +192,10 @@ impl BufferManager {
     fn pull_input_data(&mut self, input_data: *mut c_void, needed_samples: usize) {
         match &mut self.consumer {
             IntegerRingBufferConsumer(p) => {
-                let mut input: &mut [i16] = unsafe {
+                let input: &mut [i16] = unsafe {
                     slice::from_raw_parts_mut::<i16>(input_data as *mut i16, needed_samples)
                 };
-                let read = p.pop_slice(&mut input);
+                let read = p.pop_slice(input);
                 if read < needed_samples {
                     for i in 0..(needed_samples - read) {
                         input[read + i] = 0;
@@ -203,10 +203,10 @@ impl BufferManager {
                 }
             }
             FloatRingBufferConsumer(p) => {
-                let mut input: &mut [f32] = unsafe {
+                let input: &mut [f32] = unsafe {
                     slice::from_raw_parts_mut::<f32>(input_data as *mut f32, needed_samples)
                 };
-                let read = p.pop_slice(&mut input);
+                let read = p.pop_slice(input);
                 if read < needed_samples {
                     for i in 0..(needed_samples - read) {
                         input[read + i] = 0.;
