@@ -217,17 +217,16 @@ impl BufferManager {
     }
 
     fn get_linear_input_data(&mut self, nsamples: usize) -> *const c_void {
-        let p: *mut c_void;
-        match &mut self.linear_input_buffer {
+        let p = match &mut self.linear_input_buffer {
             LinearInputBuffer::IntegerLinearInputBuffer(b) => {
                 b.resize(nsamples, 0);
-                p = b.as_mut_ptr() as *mut c_void;
+                b.as_mut_ptr() as *mut c_void
             }
             LinearInputBuffer::FloatLinearInputBuffer(b) => {
                 b.resize(nsamples, 0.);
-                p = b.as_mut_ptr() as *mut c_void;
+                b.as_mut_ptr() as *mut c_void
             }
-        }
+        };
         self.pull_input_data(p, nsamples);
 
         p
