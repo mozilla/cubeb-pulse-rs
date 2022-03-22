@@ -1195,11 +1195,11 @@ fn context_success(_: &pulse::Context, success: i32, u: *mut c_void) {
 }
 
 fn invalid_format() -> Error {
-    unsafe { Error::from_raw(ffi::CUBEB_ERROR_INVALID_FORMAT) }
+    Error::from_raw(ffi::CUBEB_ERROR_INVALID_FORMAT)
 }
 
 fn not_supported() -> Error {
-    unsafe { Error::from_raw(ffi::CUBEB_ERROR_NOT_SUPPORTED) }
+    Error::from_raw(ffi::CUBEB_ERROR_NOT_SUPPORTED)
 }
 
 #[cfg(all(test, not(feature = "pulse-dlopen")))]
