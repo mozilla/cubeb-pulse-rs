@@ -524,7 +524,7 @@ impl ContextOps for PulseContext {
         user_ptr: *mut c_void,
     ) -> Result<Stream> {
         if self.error {
-            let _ = self.context_init()?;
+            self.context_init()?;
         }
 
         let stm = PulseStream::new(
