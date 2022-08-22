@@ -1025,7 +1025,7 @@ impl<'ctx> PulseStream<'ctx> {
         true
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(cyclomatic_complexity))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cognitive_complexity))]
     fn trigger_user_callback(&mut self, input_data: *const c_void, nbytes: usize) {
         fn drained_cb(
             a: &pulse::MainloopApi,
