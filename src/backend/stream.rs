@@ -1066,6 +1066,7 @@ impl<'ctx> PulseStream<'ctx> {
                             read_offset
                         );
                         let read_ptr = unsafe { (input_data as *const u8).add(read_offset) };
+                        #[cfg_attr(feature = "cargo-clippy", allow(clippy::unnecessary_cast))]
                         let mut got = unsafe {
                             self.data_callback.unwrap()(
                                 self as *const _ as *mut _,
