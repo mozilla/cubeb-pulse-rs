@@ -6,8 +6,8 @@
 use backend::cork_state::CorkState;
 use backend::*;
 use cubeb_backend::{
-    ffi, log_enabled, ChannelLayout, Context, DeviceId, DeviceRef, Error, Result, SampleFormat,
-    StreamOps, StreamParamsRef, StreamPrefs,
+    ffi, log_enabled, ChannelLayout, DeviceId, DeviceRef, Error, Result, SampleFormat, StreamOps,
+    StreamParamsRef, StreamPrefs,
 };
 use pulse::{self, CVolumeExt, ChannelMapExt, SampleSpecExt, StreamLatency, USecExt};
 use pulse_ffi::*;
@@ -417,10 +417,10 @@ impl<'ctx> PulseStream<'ctx> {
         fn get_default_sink_name(
             mainloop: &pulse::ThreadedMainloop,
             context: &pulse::Context,
-        ) -> String {
+        ) -> Result<String> {
             struct CallbackData<'a> {
                 mainloop: &'a pulse::ThreadedMainloop,
-                default_sink_name: String,
+                default_sink_name: Result<String>,
             }
 
             fn server_info_cb(
@@ -431,28 +431,37 @@ impl<'ctx> PulseStream<'ctx> {
                 let r = unsafe { ptr::NonNull::new(u as *mut CallbackData).unwrap().as_mut() };
 
                 let name = unsafe { CStr::from_ptr(info.unwrap().default_sink_name) };
-                let name_slice = name.to_bytes_with_nul();
-                r.default_sink_name = std::str::from_utf8(name_slice).unwrap().to_string();
+                r.default_sink_name = match name.to_str().to_owned() {
+                    Ok(x) => Ok(String::from(x)),
+                    Err(_) => Err(cubeb_backend::Error::device_unavailable()),
+                };
 
                 r.mainloop.signal();
             }
 
             mainloop.lock();
 
-            let mut data = CallbackData {
+            let data = CallbackData {
                 mainloop,
-                default_sink_name: String::new(),
+                default_sink_name: Err(cubeb_backend::Error::error()),
             };
 
-            _ = context.get_server_info(server_info_cb, ptr::addr_of!(data) as *mut c_void);
+            match context.get_server_info(server_info_cb, ptr::addr_of!(data) as *mut c_void) {
+                Ok(x) => _ = x,
+                Err(_) => {
+                    cubeb_log!("Getting default sink name failed!");
+                    return Err(cubeb_backend::Error::device_unavailable());
+                }
+            };
 
             mainloop.wait();
             mainloop.unlock();
 
-            _ = data.default_sink_name.pop();
-            data.default_sink_name.push_str(".monitor");
+            let mut sink_name = data.default_sink_name?;
+            sink_name.pop(); // remove '\n' from the string
+            sink_name.push_str(".monitor");
 
-            data.default_sink_name
+            Ok(sink_name)
         }
 
         let mut stm = Box::new(PulseStream {
@@ -473,10 +482,14 @@ impl<'ctx> PulseStream<'ctx> {
         });
 
         if let Some(ref context) = stm.context.context {
-            let string =
-                get_default_sink_name(&stm.context.mainloop, stm.context.context.as_ref().unwrap());
-            let sink_name = CString::new(string).unwrap();
-
+            let mut loopback_sink_name = CString::new("")?; // initialize empty string
+            if input_stream_params.unwrap().prefs() == StreamPrefs::LOOPBACK {
+                let string = get_default_sink_name(
+                    &stm.context.mainloop,
+                    stm.context.context.as_ref().unwrap(),
+                )?;
+                loopback_sink_name = CString::new(string).unwrap();
+            }
             stm.context.mainloop.lock();
 
             // Setup output stream
@@ -528,7 +541,7 @@ impl<'ctx> PulseStream<'ctx> {
                 // Handle loopback audio name
                 let mut actual_stream_name = stream_name;
                 if stream_params.prefs() == StreamPrefs::LOOPBACK {
-                    actual_stream_name = Some(sink_name.as_c_str());
+                    actual_stream_name = Some(loopback_sink_name.as_c_str());
                 }
 
                 match PulseStream::stream_init(context, stream_params, actual_stream_name) {
