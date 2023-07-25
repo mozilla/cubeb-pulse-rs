@@ -488,11 +488,7 @@ impl ContextOps for PulseContext {
         debug_assert!(!collection.as_ptr().is_null());
         unsafe {
             let coll = &mut *collection.as_ptr();
-            let mut devices = Vec::from_raw_parts(
-                coll.device,
-                coll.count,
-                coll.count,
-            );
+            let mut devices = Vec::from_raw_parts(coll.device, coll.count, coll.count);
             for dev in &mut devices {
                 if !dev.group_id.is_null() {
                     let _ = CString::from_raw(dev.group_id as *mut _);
