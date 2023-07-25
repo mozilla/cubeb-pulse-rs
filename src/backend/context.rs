@@ -489,7 +489,7 @@ impl ContextOps for PulseContext {
         unsafe {
             let coll = &mut *collection.as_ptr();
             let mut devices = Vec::from_raw_parts(
-                coll.device as *mut ffi::cubeb_device_info,
+                coll.device,
                 coll.count,
                 coll.count,
             );
