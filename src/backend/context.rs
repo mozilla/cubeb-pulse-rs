@@ -163,6 +163,11 @@ impl PulseContext {
     pub fn destroy(&mut self) {
         self.context_destroy();
 
+        assert!(
+            self.input_collection_changed_callback.is_some()
+                || self.output_collection_changed_callback.is_some()
+        );
+
         if !self.mainloop.is_null() {
             self.mainloop.stop();
         }
