@@ -164,8 +164,8 @@ impl PulseContext {
         self.context_destroy();
 
         assert!(
-            self.input_collection_changed_callback.is_some()
-                || self.output_collection_changed_callback.is_some()
+            self.input_collection_changed_callback.is_none()
+                && self.output_collection_changed_callback.is_none()
         );
 
         if !self.mainloop.is_null() {
