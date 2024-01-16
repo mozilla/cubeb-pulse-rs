@@ -765,8 +765,8 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
                         self.volume = volume;
                     } else {
                         let channels = stm.get_sample_spec().channels;
-                        let vol = pulse::sw_volume_from_linear(f64::from(volume));
-                        cvol.set(u32::from(channels), vol);
+                        let vol = volume * (PA_VOLUME_NORM as f32);
+                        cvol.set(u32::from(channels), vol as pa_volume_t);
 
                         let index = stm.get_index();
 

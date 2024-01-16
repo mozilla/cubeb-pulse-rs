@@ -22,6 +22,11 @@ pub const PA_SAMPLE_MAX: c_int = 13;
 pub const PA_SAMPLE_INVALID: c_int = -1;
 pub type pa_sample_format_t = c_int;
 
+pub const PA_VOLUME_MUTED: c_uint = 0;
+pub const PA_VOLUME_NORM: c_uint = 0x10000;
+pub const PA_VOLUME_MAX: c_uint = 0x7fffffff;
+
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Struct_pa_sample_spec {
