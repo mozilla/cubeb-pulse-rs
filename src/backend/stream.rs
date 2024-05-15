@@ -447,9 +447,9 @@ impl<'ctx> PulseStream<'ctx> {
                             latency_frames * stm.output_sample_spec.frame_size() as u32;
 
                         let battr = pa_buffer_attr {
-                            maxlength: u32::max_value(),
-                            prebuf: u32::max_value(),
-                            fragsize: u32::max_value(),
+                            maxlength: u32::MAX,
+                            prebuf: u32::MAX,
+                            fragsize: u32::MAX,
                             tlength: buffer_size_bytes * 2,
                             minreq: buffer_size_bytes / 4,
                         };
@@ -490,8 +490,8 @@ impl<'ctx> PulseStream<'ctx> {
                         let buffer_size_bytes =
                             latency_frames * stm.input_sample_spec.frame_size() as u32;
                         let battr = pa_buffer_attr {
-                            maxlength: u32::max_value(),
-                            prebuf: u32::max_value(),
+                            maxlength: u32::MAX,
+                            prebuf: u32::MAX,
                             fragsize: buffer_size_bytes,
                             tlength: buffer_size_bytes,
                             minreq: buffer_size_bytes,
