@@ -283,7 +283,7 @@ pub struct PulseStream<'ctx> {
 }
 
 impl<'ctx> PulseStream<'ctx> {
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::too_many_arguments))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         context: &'ctx PulseContext,
         stream_name: Option<&CStr>,
@@ -1033,7 +1033,7 @@ impl<'ctx> PulseStream<'ctx> {
         true
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cognitive_complexity))]
+    #[allow(clippy::cognitive_complexity)]
     fn trigger_user_callback(&mut self, input_data: *const c_void, nbytes: usize) {
         fn drained_cb(
             a: &pulse::MainloopApi,
@@ -1074,7 +1074,7 @@ impl<'ctx> PulseStream<'ctx> {
                             read_offset
                         );
                         let read_ptr = unsafe { (input_data as *const u8).add(read_offset) };
-                        #[cfg_attr(feature = "cargo-clippy", allow(clippy::unnecessary_cast))]
+                        #[allow(clippy::unnecessary_cast)]
                         let mut got = unsafe {
                             self.data_callback.unwrap()(
                                 self as *const _ as *mut _,
