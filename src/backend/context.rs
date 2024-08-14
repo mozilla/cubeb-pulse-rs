@@ -3,7 +3,7 @@
 // This program is made available under an ISC-style license.  See the
 // accompanying file LICENSE for details.
 
-use backend::*;
+use crate::backend::*;
 use cubeb_backend::{
     ffi, log_enabled, Context, ContextOps, DeviceCollectionRef, DeviceId, DeviceType, Error,
     InputProcessingParams, Ops, Result, Stream, StreamParams, StreamParamsRef,
