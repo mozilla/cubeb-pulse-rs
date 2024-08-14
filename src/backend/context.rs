@@ -10,7 +10,6 @@ use cubeb_backend::{
 };
 use pulse::{self, ProplistExt};
 use pulse_ffi::*;
-use semver;
 use std::cell::RefCell;
 use std::default::Default;
 use std::ffi::{CStr, CString};
