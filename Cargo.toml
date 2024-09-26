@@ -17,3 +17,8 @@ pulse-ffi = { path = "pulse-ffi" }
 pulse = { path = "pulse-rs" }
 semver = "1.0"
 ringbuf = "0.2"
+
+# Workaround for https://github.com/rust-lang/cargo/issues/6745 to allow this
+# Cargo.toml file to appear under a subdirectory of a workspace without being in
+# that workspace (e.g. in cubeb-rs).
+[workspace]
