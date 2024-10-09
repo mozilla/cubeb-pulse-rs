@@ -71,7 +71,7 @@ impl Stream {
         unsafe { ffi::pa_stream_get_index(self.raw_mut()) }
     }
 
-    pub fn get_device_name<'a>(&'a self) -> Result<&'a CStr> {
+    pub fn get_device_name(&self) -> Result<&CStr> {
         let r = unsafe { ffi::pa_stream_get_device_name(self.raw_mut()) };
         if r.is_null() {
             let err = if let Some(c) = self.get_context() {
@@ -219,10 +219,8 @@ impl Stream {
         {
             let mut stm = stream::from_raw_ptr(s);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&mut stm, success, userdata);
+            (*cb.as_ptr())(&mut stm, success, userdata);
             forget(stm);
-
-            result
         }
 
         let r = unsafe {
@@ -258,10 +256,8 @@ impl Stream {
         {
             let mut stm = stream::from_raw_ptr(s);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&mut stm, userdata);
+            (*cb.as_ptr())(&mut stm, userdata);
             forget(stm);
-
-            result
         }
 
         unsafe {
@@ -291,10 +287,8 @@ impl Stream {
         {
             let mut stm = stream::from_raw_ptr(s);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&mut stm, nbytes, userdata);
+            (*cb.as_ptr())(&mut stm, nbytes, userdata);
             forget(stm);
-
-            result
         }
 
         unsafe {
@@ -324,10 +318,8 @@ impl Stream {
         {
             let mut stm = stream::from_raw_ptr(s);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&mut stm, nbytes, userdata);
+            (*cb.as_ptr())(&mut stm, nbytes, userdata);
             forget(stm);
-
-            result
         }
 
         unsafe {
@@ -351,10 +343,8 @@ impl Stream {
         {
             let mut stm = stream::from_raw_ptr(s);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&mut stm, success, userdata);
+            (*cb.as_ptr())(&mut stm, success, userdata);
             forget(stm);
-
-            result
         }
 
         let r = unsafe { ffi::pa_stream_cork(self.raw_mut(), b, Some(wrapped::<CB>), userdata) };
@@ -429,10 +419,8 @@ impl Stream {
         {
             let mut stm = stream::from_raw_ptr(s);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&mut stm, success, userdata);
+            (*cb.as_ptr())(&mut stm, success, userdata);
             forget(stm);
-
-            result
         }
 
         let r = unsafe {

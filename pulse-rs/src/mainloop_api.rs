@@ -21,9 +21,8 @@ where
         F: Fn(&MainloopApi, *mut c_void),
     {
         let api = from_raw_ptr(m);
-        let result = mem::transmute::<_, &F>(&())(&api, userdata);
+        mem::transmute::<_, &F>(&())(&api, userdata);
         mem::forget(api);
-        result
     }
 
     Some(wrapped::<F>)

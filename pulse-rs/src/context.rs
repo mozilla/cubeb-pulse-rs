@@ -107,10 +107,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, userdata);
+            (*cb.as_ptr())(&ctx, userdata);
             forget(ctx);
-
-            result
         }
 
         unsafe {
@@ -166,10 +164,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, userdata);
+            (*cb.as_ptr())(&ctx, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -201,10 +197,8 @@ impl Context {
             let api = mainloop_api::from_raw_ptr(a);
             let timeval = &*tv;
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&api, e, timeval, userdata);
+            (*cb.as_ptr())(&api, e, timeval, userdata);
             forget(api);
-
-            result
         }
 
         unsafe { ffi::pa_context_rttime_new(self.raw_mut(), usec, Some(wrapped::<CB>), userdata) }
@@ -227,10 +221,8 @@ impl Context {
             let info = if i.is_null() { None } else { Some(&*i) };
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, info, userdata);
+            (*cb.as_ptr())(&ctx, info, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -262,10 +254,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, info, eol, userdata);
+            (*cb.as_ptr())(&ctx, info, eol, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -296,10 +286,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, info, eol, userdata);
+            (*cb.as_ptr())(&ctx, info, eol, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -330,10 +318,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, info, eol, userdata);
+            (*cb.as_ptr())(&ctx, info, eol, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -359,10 +345,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, info, eol, userdata);
+            (*cb.as_ptr())(&ctx, info, eol, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -393,10 +377,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, success, userdata);
+            (*cb.as_ptr())(&ctx, success, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -432,10 +414,8 @@ impl Context {
         {
             let ctx = context::from_raw_ptr(c);
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, success, userdata);
+            (*cb.as_ptr())(&ctx, success, userdata);
             forget(ctx);
-
-            result
         }
 
         op_or_err!(
@@ -469,10 +449,8 @@ impl Context {
             let event = SubscriptionEvent::try_from(t)
                 .expect("pa_context_subscribe_cb_t passed invalid pa_subscription_event_type_t");
             let cb = MaybeUninit::<F>::uninit();
-            let result = (*cb.as_ptr())(&ctx, event, idx, userdata);
+            (*cb.as_ptr())(&ctx, event, idx, userdata);
             forget(ctx);
-
-            result
         }
 
         unsafe {

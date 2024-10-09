@@ -16,7 +16,7 @@ where
     U: Into<Option<&'a CStr>>,
 {
     fn unwrap_cstr(self) -> *const c_char {
-        self.into().map(|o| o.as_ptr()).unwrap_or(0 as *const _)
+        self.into().map(|o| o.as_ptr()).unwrap_or(std::ptr::null())
     }
 }
 
