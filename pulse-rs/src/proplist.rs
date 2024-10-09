@@ -28,5 +28,5 @@ impl Proplist {
 }
 
 pub unsafe fn from_raw_ptr(raw: *mut ffi::pa_proplist) -> Proplist {
-    return Proplist(raw);
+    Proplist(raw)
 }

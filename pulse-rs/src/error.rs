@@ -32,7 +32,7 @@ impl ErrorCode {
 
     pub fn from_error_code(err: ffi::pa_error_code_t) -> Self {
         debug_assert!(err > 0);
-        ErrorCode { err: err }
+        ErrorCode { err }
     }
 
     fn desc(&self) -> &'static str {
