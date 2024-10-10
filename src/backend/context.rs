@@ -270,6 +270,8 @@ impl ContextOps for PulseContext {
     }
 
     fn backend_id(&mut self) -> &'static CStr {
+        // https://github.com/rust-lang/rust-clippy/issues/13531
+        #[allow(clippy::manual_c_str_literals)]
         unsafe { CStr::from_ptr(b"pulse-rust\0".as_ptr() as *const _) }
     }
 
