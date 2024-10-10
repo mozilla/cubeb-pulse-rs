@@ -609,13 +609,13 @@ impl<'ctx> PulseStream<'ctx> {
     }
 }
 
-impl<'ctx> Drop for PulseStream<'ctx> {
+impl Drop for PulseStream<'_> {
     fn drop(&mut self) {
         self.destroy();
     }
 }
 
-impl<'ctx> StreamOps for PulseStream<'ctx> {
+impl StreamOps for PulseStream<'_> {
     fn start(&mut self) -> Result<()> {
         fn output_preroll(_: &pulse::MainloopApi, u: *mut c_void) {
             let stm = unsafe { &mut *(u as *mut PulseStream) };
@@ -868,7 +868,7 @@ impl<'ctx> StreamOps for PulseStream<'ctx> {
     }
 }
 
-impl<'ctx> PulseStream<'ctx> {
+impl PulseStream<'_> {
     fn stream_init(
         context: &pulse::Context,
         stream_params: &StreamParamsRef,

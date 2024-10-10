@@ -738,7 +738,7 @@ impl<'a> PulseDevListData<'a> {
     }
 }
 
-impl<'a> Drop for PulseDevListData<'a> {
+impl Drop for PulseDevListData<'_> {
     fn drop(&mut self) {
         for elem in &mut self.devinfo {
             let _ = unsafe { Box::from_raw(elem) };
