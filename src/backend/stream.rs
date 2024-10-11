@@ -414,6 +414,56 @@ impl<'ctx> PulseStream<'ctx> {
             }
         }
 
+        fn get_default_sink_name(
+            mainloop: &pulse::ThreadedMainloop,
+            context: &pulse::Context,
+        ) -> Result<String> {
+            struct CallbackData<'a> {
+                mainloop: &'a pulse::ThreadedMainloop,
+                default_sink_name: Result<String>,
+            }
+
+            fn server_info_cb(
+                _context: &pulse::Context,
+                info: Option<&pulse::ServerInfo>,
+                u: *mut c_void,
+            ) {
+                let r = unsafe { ptr::NonNull::new(u as *mut CallbackData).unwrap().as_mut() };
+
+                let name = unsafe { CStr::from_ptr(info.unwrap().default_sink_name) };
+                r.default_sink_name = match name.to_str().to_owned() {
+                    Ok(x) => Ok(String::from(x)),
+                    Err(_) => Err(cubeb_backend::Error::device_unavailable()),
+                };
+
+                r.mainloop.signal();
+            }
+
+            mainloop.lock();
+
+            let data = CallbackData {
+                mainloop,
+                default_sink_name: Err(cubeb_backend::Error::error()),
+            };
+
+            match context.get_server_info(server_info_cb, ptr::addr_of!(data) as *mut c_void) {
+                Ok(x) => _ = x,
+                Err(_) => {
+                    cubeb_log!("Getting default sink name failed!");
+                    return Err(cubeb_backend::Error::device_unavailable());
+                }
+            };
+
+            mainloop.wait();
+            mainloop.unlock();
+
+            let mut sink_name = data.default_sink_name?;
+            sink_name.pop(); // remove '\n' from the string
+            sink_name.push_str(".monitor");
+
+            Ok(sink_name)
+        }
+
         let mut stm = Box::new(PulseStream {
             context,
             output_stream: None,
@@ -432,6 +482,14 @@ impl<'ctx> PulseStream<'ctx> {
         });
 
         if let Some(ref context) = stm.context.context {
+            let mut loopback_sink_name = CString::new("")?; // initialize empty string
+            if input_stream_params.unwrap().prefs() == StreamPrefs::LOOPBACK {
+                let string = get_default_sink_name(
+                    &stm.context.mainloop,
+                    stm.context.context.as_ref().unwrap(),
+                )?;
+                loopback_sink_name = CString::new(string).unwrap();
+            }
             stm.context.mainloop.lock();
 
             // Setup output stream
@@ -480,7 +538,13 @@ impl<'ctx> PulseStream<'ctx> {
 
             // Set up input stream
             if let Some(stream_params) = input_stream_params {
-                match PulseStream::stream_init(context, stream_params, stream_name) {
+                // Handle loopback audio name
+                let mut actual_stream_name = stream_name;
+                if stream_params.prefs() == StreamPrefs::LOOPBACK {
+                    actual_stream_name = Some(loopback_sink_name.as_c_str());
+                }
+
+                match PulseStream::stream_init(context, stream_params, actual_stream_name) {
                     Ok(s) => {
                         stm.input_sample_spec = *s.get_sample_spec();
 
@@ -874,11 +938,6 @@ impl PulseStream<'_> {
         stream_params: &StreamParamsRef,
         stream_name: Option<&CStr>,
     ) -> Result<pulse::Stream> {
-        if stream_params.prefs() == StreamPrefs::LOOPBACK {
-            cubeb_log!("Error: StreamPref::LOOPBACK unimplemented");
-            return Err(not_supported());
-        }
-
         fn to_pulse_format(format: SampleFormat) -> pulse::SampleFormat {
             match format {
                 SampleFormat::S16LE => pulse::SampleFormat::Signed16LE,
