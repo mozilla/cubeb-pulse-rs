@@ -7,6 +7,7 @@ license = "ISC"
 
 [features]
 pulse-dlopen = ["pulse-ffi/dlopen"]
+gecko-in-tree = ["cubeb-backend/gecko-in-tree"]
 
 [lib]
 crate-type = ["staticlib", "rlib"]
