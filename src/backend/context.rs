@@ -39,6 +39,8 @@ pub struct PulseContext {
     pub input_collection_changed_user_ptr: *mut c_void,
     pub output_collection_changed_callback: ffi::cubeb_device_collection_changed_callback,
     pub output_collection_changed_user_ptr: *mut c_void,
+    pub default_sink_name: Option<CString>,
+    pub default_source_name: Option<CString>,
     pub error: bool,
     pub version_2_0_0: bool,
     pub version_0_9_8: bool,
@@ -67,6 +69,8 @@ impl PulseContext {
             input_collection_changed_user_ptr: ptr::null_mut(),
             output_collection_changed_callback: None,
             output_collection_changed_user_ptr: ptr::null_mut(),
+            default_sink_name: None,
+            default_source_name: None,
             error: true,
             version_0_9_8: false,
             version_2_0_0: false,
@@ -88,6 +92,8 @@ impl PulseContext {
             input_collection_changed_user_ptr: ptr::null_mut(),
             output_collection_changed_callback: None,
             output_collection_changed_user_ptr: ptr::null_mut(),
+            default_sink_name: None,
+            default_source_name: None,
             error: true,
             version_0_9_8: false,
             version_2_0_0: false,
@@ -111,6 +117,36 @@ impl PulseContext {
         }
 
         if let Some(info) = info {
+            let ctx = unsafe { &mut *(u as *mut PulseContext) };
+
+            // Check if default devices changed, and call the appropriate callback if present.
+            let new_sink_name = try_cstr_from(info.default_sink_name).map(|s| s.to_owned());
+            let new_source_name = try_cstr_from(info.default_source_name).map(|s| s.to_owned());
+
+            let sink_changed = ctx.default_sink_name != new_sink_name;
+            let source_changed = ctx.default_source_name != new_source_name;
+
+            ctx.default_sink_name = new_sink_name;
+            ctx.default_source_name = new_source_name;
+
+            if sink_changed && ctx.output_collection_changed_callback.is_some() {
+                unsafe {
+                    ctx.output_collection_changed_callback.unwrap()(
+                        ctx as *mut _ as *mut _,
+                        ctx.output_collection_changed_user_ptr,
+                    );
+                }
+            }
+
+            if source_changed && ctx.input_collection_changed_callback.is_some() {
+                unsafe {
+                    ctx.input_collection_changed_callback.unwrap()(
+                        ctx as *mut _ as *mut _,
+                        ctx.input_collection_changed_user_ptr,
+                    );
+                }
+            }
+
             let _ = context.get_sink_info_by_name(
                 try_cstr_from(info.default_sink_name),
                 sink_info_cb,
