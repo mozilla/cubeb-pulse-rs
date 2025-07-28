@@ -54,7 +54,7 @@ impl PulseContext {
         let libpulse = unsafe { open() };
         if libpulse.is_none() {
             cubeb_log!("libpulse not found");
-            return Err(Error::error());
+            return Err(Error::Error);
         }
 
         let ctx = Box::new(PulseContext {
@@ -165,13 +165,13 @@ impl PulseContext {
         if ctx.mainloop.start().is_err() {
             ctx.destroy();
             cubeb_log!("Error: couldn't start pulse's mainloop");
-            return Err(Error::error());
+            return Err(Error::Error);
         }
 
         if ctx.context_init().is_err() {
             ctx.destroy();
             cubeb_log!("Error: couldn't init pulse's context");
-            return Err(Error::error());
+            return Err(Error::Error);
         }
 
         ctx.mainloop.lock();
@@ -288,7 +288,7 @@ impl PulseContext {
             } else {
                 self.mainloop.unlock();
                 cubeb_log!("Error: context subscribe failed");
-                return Err(Error::error());
+                return Err(Error::Error);
             }
 
             self.mainloop.unlock();
@@ -317,7 +317,7 @@ impl ContextOps for PulseContext {
             Some(ref info) => Ok(u32::from(info.channel_map.channels)),
             None => {
                 cubeb_log!("Error: couldn't get the max channel count");
-                Err(Error::error())
+                Err(Error::Error)
             }
         }
     }
@@ -332,7 +332,7 @@ impl ContextOps for PulseContext {
             Some(ref info) => Ok(info.sample_spec.rate),
             None => {
                 cubeb_log!("Error: Couldn't get the preferred sample rate");
-                Err(Error::error())
+                Err(Error::Error)
             }
         }
     }
@@ -646,7 +646,7 @@ impl PulseContext {
         let context_ptr: *mut c_void = self as *mut _ as *mut _;
         if self.context.is_none() {
             cubeb_log!("Error: couldn't create pulse's context");
-            return Err(Error::error());
+            return Err(Error::Error);
         }
 
         self.mainloop.lock();
@@ -663,7 +663,7 @@ impl PulseContext {
             self.mainloop.unlock();
             self.context_destroy();
             cubeb_log!("Error: error while waiting for pulse's context to be ready");
-            return Err(Error::error());
+            return Err(Error::Error);
         }
 
         self.mainloop.unlock();
