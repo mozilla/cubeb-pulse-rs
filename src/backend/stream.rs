@@ -1062,7 +1062,7 @@ impl PulseStream<'_> {
                 match stm.begin_write(towrite) {
                     Err(e) => {
                         cubeb_logv!("Error: failure to write data");
-                        panic!("Failed to write data: {}", e);
+                        panic!("Failed to write data: {e}");
                     }
                     Ok((buffer, size)) => {
                         debug_assert!(size > 0);
