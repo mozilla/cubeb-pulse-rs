@@ -721,6 +721,8 @@ impl StreamOps for PulseStream<'_> {
     }
 
     fn latency(&mut self) -> Result<u32> {
+        let _mainloop_lock = self.context.mainloop.lock_guard_if_needed();
+
         match self.output_stream {
             None => {
                 cubeb_log!("Error: calling latency() on an input-only stream");
@@ -744,6 +746,8 @@ impl StreamOps for PulseStream<'_> {
     }
 
     fn input_latency(&mut self) -> Result<u32> {
+        let _mainloop_lock = self.context.mainloop.lock_guard_if_needed();
+
         match self.input_stream {
             None => {
                 cubeb_log!("Error: calling input_latency() on an output-only stream");
@@ -803,6 +807,8 @@ impl StreamOps for PulseStream<'_> {
 
     fn current_device(&mut self) -> Result<&DeviceRef> {
         if self.context.version_0_9_8 {
+            let _mainloop_lock = self.context.mainloop.lock_guard_if_needed();
+
             let mut dev: Box<Device> = Box::new(Device(Default::default()));
 
             if let Some(ref stm) = self.input_stream {
