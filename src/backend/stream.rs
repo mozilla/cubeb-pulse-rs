@@ -14,9 +14,9 @@ use pulse_ffi::*;
 use ringbuf::RingBuffer;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_long, c_void};
+use std::ptr;
 use std::slice;
 use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
-use std::{mem, ptr};
 
 use self::LinearInputBuffer::*;
 use self::RingBufferConsumer::*;
@@ -822,10 +822,10 @@ impl StreamOps for PulseStream<'_> {
 
     fn current_device(&mut self) -> Result<&DeviceRef> {
         if self.context.version_0_9_8 {
-            let mut dev: Box<ffi::cubeb_device> = Box::new(unsafe { mem::zeroed() });
+            let mut dev: Box<Device> = Box::new(Device(Default::default()));
 
             if let Some(ref stm) = self.input_stream {
-                dev.input_name = match stm.get_device_name() {
+                dev.0.input_name = match stm.get_device_name() {
                     Ok(name) => name.to_owned().into_raw(),
                     Err(_) => {
                         cubeb_log!("Error: couldn't get the input stream's device name");
@@ -835,7 +835,7 @@ impl StreamOps for PulseStream<'_> {
             }
 
             if let Some(ref stm) = self.output_stream {
-                dev.output_name = match stm.get_device_name() {
+                dev.0.output_name = match stm.get_device_name() {
                     Ok(name) => name.to_owned().into_raw(),
                     Err(_) => {
                         cubeb_log!("Error: couldn't get the output stream's device name");
