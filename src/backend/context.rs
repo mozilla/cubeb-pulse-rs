@@ -172,12 +172,16 @@ impl PulseContext {
             // Fire-and-forget: detach to release our ref without canceling.
             // PulseAudio holds its own ref while the operation is in flight;
             // context_destroy's drain ensures it completes before teardown.
-            if let Ok(o) = context.get_sink_info_by_name(
+            match context.get_sink_info_by_name(
                 try_cstr_from(info.default_sink_name),
                 sink_info_cb,
                 u,
             ) {
-                o.detach();
+                Ok(o) => o.detach(),
+                Err(e) => {
+                    cubeb_log!("Error: get_sink_info_by_name failed: {}", e);
+                    ctx.mainloop.signal();
+                }
             }
         } else {
             // If info is None, then an error occured.
