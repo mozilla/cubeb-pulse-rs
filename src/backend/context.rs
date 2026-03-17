@@ -206,17 +206,18 @@ impl PulseContext {
             return Err(Error::Error);
         }
 
-        ctx.mainloop.lock();
         /* server_info_callback performs a second async query,
          * which is responsible for initializing default_sink_info
          * and signalling the mainloop to end the wait. */
         let user_data: *mut c_void = ctx.as_mut() as *mut _ as *mut _;
-        if let Some(ref context) = ctx.context {
-            if let Ok(o) = context.get_server_info(PulseContext::server_info_cb, user_data) {
-                ctx.operation_wait(None, &o);
+        {
+            let _mainloop_lock = ctx.mainloop.lock_guard();
+            if let Some(ref context) = ctx.context {
+                if let Ok(o) = context.get_server_info(PulseContext::server_info_cb, user_data) {
+                    ctx.operation_wait(None, &o);
+                }
             }
         }
-        ctx.mainloop.unlock();
 
         /* Update `default_sink_info` when the default device changes. */
         if let Err(e) = ctx.subscribe_notifications(pulse::SubscriptionMask::SERVER) {
@@ -315,19 +316,16 @@ impl PulseContext {
 
         let user_data: *mut c_void = self as *const _ as *mut _;
         if let Some(ref context) = self.context {
-            self.mainloop.lock();
+            let _mainloop_lock = self.mainloop.lock_guard();
 
             context.set_subscribe_callback(update_collection, user_data);
 
             if let Ok(o) = context.subscribe(mask, success, self as *const _ as *mut _) {
                 self.operation_wait(None, &o);
             } else {
-                self.mainloop.unlock();
                 cubeb_log!("Error: context subscribe failed");
                 return Err(Error::Error);
             }
-
-            self.mainloop.unlock();
         }
 
         Ok(())
@@ -522,7 +520,7 @@ impl ContextOps for PulseContext {
         let mut user_data = PulseDevListData::new(self);
 
         if let Some(ref context) = self.context {
-            self.mainloop.lock();
+            let _mainloop_lock = self.mainloop.lock_guard();
 
             if let Ok(o) =
                 context.get_server_info(default_device_names, &mut user_data as *mut _ as *mut _)
@@ -545,8 +543,6 @@ impl ContextOps for PulseContext {
                     self.operation_wait(None, &o);
                 }
             }
-
-            self.mainloop.unlock();
         }
 
         Ok(user_data.devinfo.into_boxed_slice())
@@ -680,24 +676,25 @@ impl PulseContext {
             return Err(Error::Error);
         }
 
-        self.mainloop.lock();
-        let connected = if let Some(ref context) = self.context {
-            context.set_state_callback(error_state, context_ptr);
-            context
-                .connect(None, pulse::ContextFlags::empty(), ptr::null())
-                .is_ok()
-        } else {
-            false
+        let ready = {
+            let _mainloop_lock = self.mainloop.lock_guard();
+            let connected = if let Some(ref context) = self.context {
+                context.set_state_callback(error_state, context_ptr);
+                context
+                    .connect(None, pulse::ContextFlags::empty(), ptr::null())
+                    .is_ok()
+            } else {
+                false
+            };
+
+            connected && self.wait_until_context_ready()
         };
 
-        if !connected || !self.wait_until_context_ready() {
-            self.mainloop.unlock();
+        if !ready {
             self.context_destroy();
             cubeb_log!("Error: error while waiting for pulse's context to be ready");
             return Err(Error::Error);
         }
-
-        self.mainloop.unlock();
 
         let version_str = unsafe { CStr::from_ptr(pulse::library_version()) };
         if let Ok(version) = semver::Version::parse(&version_str.to_string_lossy()) {
@@ -719,7 +716,7 @@ impl PulseContext {
         }
 
         let context_ptr: *mut c_void = self as *mut _ as *mut _;
-        self.mainloop.lock();
+        let _mainloop_lock = self.mainloop.lock_guard();
         if let Some(ref context) = self.context {
             if let Ok(o) = context.drain(drain_complete, context_ptr) {
                 self.operation_wait(None, &o);
@@ -730,7 +727,6 @@ impl PulseContext {
             ctx.disconnect();
             ctx.unref();
         }
-        self.mainloop.unlock();
     }
 
     pub fn operation_wait<'a, S>(&self, s: S, o: &pulse::Operation) -> bool
