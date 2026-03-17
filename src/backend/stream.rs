@@ -445,7 +445,7 @@ impl<'ctx> PulseStream<'ctx> {
         });
 
         if let Some(ref context) = stm.context.context {
-            stm.context.mainloop.lock();
+            let mut mainloop_lock = Some(stm.context.mainloop.lock_guard());
 
             // Setup output stream
             if let Some(stream_params) = output_stream_params {
@@ -490,14 +490,14 @@ impl<'ctx> PulseStream<'ctx> {
                         stm.output_stream = Some(s);
                         if let Err(e) = connect_result {
                             cubeb_log!("Output stream connect error: {}", e);
-                            stm.context.mainloop.unlock();
+                            drop(mainloop_lock.take());
                             stm.destroy();
                             return Err(Error::Error);
                         }
                     }
                     Err(e) => {
                         cubeb_log!("Output stream initialization error");
-                        stm.context.mainloop.unlock();
+                        drop(mainloop_lock.take());
                         stm.destroy();
                         return Err(e);
                     }
@@ -540,14 +540,14 @@ impl<'ctx> PulseStream<'ctx> {
                         stm.input_stream = Some(s);
                         if let Err(e) = connect_result {
                             cubeb_log!("Input stream connect error: {}", e);
-                            stm.context.mainloop.unlock();
+                            drop(mainloop_lock.take());
                             stm.destroy();
                             return Err(Error::Error);
                         }
                     }
                     Err(e) => {
                         cubeb_log!("Input stream initialization error");
-                        stm.context.mainloop.unlock();
+                        drop(mainloop_lock.take());
                         stm.destroy();
                         return Err(e);
                     }
@@ -573,9 +573,8 @@ impl<'ctx> PulseStream<'ctx> {
                 false
             };
 
-            stm.context.mainloop.unlock();
-
             if !r {
+                drop(mainloop_lock.take());
                 stm.destroy();
                 cubeb_log!("Error while waiting for the stream to be ready");
                 return Err(Error::Error);
@@ -617,28 +616,25 @@ impl<'ctx> PulseStream<'ctx> {
     fn destroy(&mut self) {
         self.cork(CorkState::cork());
 
-        self.context.mainloop.lock();
-        {
-            if let Some(stm) = self.output_stream.take() {
-                let drain_timer = self.drain_timer.load(Ordering::Acquire);
-                if !drain_timer.is_null() {
-                    /* there's no pa_rttime_free, so use this instead. */
-                    self.context.mainloop.get_api().time_free(drain_timer);
-                }
-                stm.clear_state_callback();
-                stm.clear_write_callback();
-                let _ = stm.disconnect();
-                stm.unref();
+        let _mainloop_lock = self.context.mainloop.lock_guard();
+        if let Some(stm) = self.output_stream.take() {
+            let drain_timer = self.drain_timer.load(Ordering::Acquire);
+            if !drain_timer.is_null() {
+                /* there's no pa_rttime_free, so use this instead. */
+                self.context.mainloop.get_api().time_free(drain_timer);
             }
-
-            if let Some(stm) = self.input_stream.take() {
-                stm.clear_state_callback();
-                stm.clear_read_callback();
-                let _ = stm.disconnect();
-                stm.unref();
-            }
+            stm.clear_state_callback();
+            stm.clear_write_callback();
+            let _ = stm.disconnect();
+            stm.unref();
         }
-        self.context.mainloop.unlock();
+
+        if let Some(stm) = self.input_stream.take() {
+            stm.clear_state_callback();
+            stm.clear_read_callback();
+            let _ = stm.disconnect();
+            stm.unref();
+        }
     }
 }
 
@@ -676,12 +672,11 @@ impl StreamOps for PulseStream<'_> {
             /* When doing output-only or duplex, we need to manually call user cb once in order to
              * make things roll. This is done via a defer event in order to execute it from PA
              * server thread. */
-            self.context.mainloop.lock();
+            let _mainloop_lock = self.context.mainloop.lock_guard();
             self.context
                 .mainloop
                 .get_api()
                 .once(output_preroll, self as *const _ as *mut _);
-            self.context.mainloop.unlock();
         }
 
         Ok(())
@@ -689,7 +684,7 @@ impl StreamOps for PulseStream<'_> {
 
     fn stop(&mut self) -> Result<()> {
         {
-            self.context.mainloop.lock();
+            let _mainloop_lock = self.context.mainloop.lock_guard();
             self.shutdown = true;
             // Cancel any pending drain timer rather than blocking until it
             // fires, matching destroy() and other backends' behaviour.
@@ -699,7 +694,6 @@ impl StreamOps for PulseStream<'_> {
                 self.context.mainloop.get_api().time_free(drain_timer);
                 self.drain_timer.store(ptr::null_mut(), Ordering::Release);
             }
-            self.context.mainloop.unlock();
         }
         self.cork(CorkState::cork() | CorkState::notify());
 
@@ -707,19 +701,14 @@ impl StreamOps for PulseStream<'_> {
     }
 
     fn position(&mut self) -> Result<u64> {
-        let in_thread = self.context.mainloop.in_thread();
+        let _mainloop_lock = self.context.mainloop.lock_guard_if_needed();
 
-        if !in_thread {
-            self.context.mainloop.lock();
-        }
-
-        if self.output_stream.is_none() {
+        let Some(stm) = self.output_stream.as_ref() else {
             cubeb_log!("Calling position() on an input-only stream");
             return Err(Error::Error);
-        }
+        };
 
-        let stm = self.output_stream.as_ref().unwrap();
-        let r = match stm.get_time() {
+        match stm.get_time() {
             Ok(r_usec) => {
                 let bytes = USecExt::to_bytes(r_usec, &self.output_sample_spec);
                 Ok((bytes / self.output_sample_spec.frame_size()) as u64)
@@ -728,13 +717,7 @@ impl StreamOps for PulseStream<'_> {
                 cubeb_log!("Error: stm.get_time failed");
                 Err(Error::Error)
             }
-        };
-
-        if !in_thread {
-            self.context.mainloop.unlock();
         }
-
-        r
     }
 
     fn latency(&mut self) -> Result<u32> {
@@ -791,9 +774,8 @@ impl StreamOps for PulseStream<'_> {
             }
             Some(_) => {
                 if self.context.context.is_some() {
-                    self.context.mainloop.lock();
+                    let _mainloop_lock = self.context.mainloop.lock_guard();
                     self.volume = volume;
-                    self.context.mainloop.unlock();
                     Ok(())
                 } else {
                     cubeb_log!("Error: set_volume: no context?");
@@ -810,11 +792,10 @@ impl StreamOps for PulseStream<'_> {
                 Err(Error::Error)
             }
             Some(ref stm) => {
-                self.context.mainloop.lock();
+                let _mainloop_lock = self.context.mainloop.lock_guard();
                 if let Ok(o) = stm.set_name(name, stream_success, self as *const _ as *mut _) {
                     self.context.operation_wait(stm, &o);
                 }
-                self.context.mainloop.unlock();
                 Ok(())
             }
         }
@@ -980,10 +961,9 @@ impl PulseStream<'_> {
 
     fn cork(&mut self, state: CorkState) {
         {
-            self.context.mainloop.lock();
+            let _mainloop_lock = self.context.mainloop.lock_guard();
             self.cork_stream(self.output_stream.as_ref(), state);
             self.cork_stream(self.input_stream.as_ref(), state);
-            self.context.mainloop.unlock()
         }
 
         if state.is_notify() {
