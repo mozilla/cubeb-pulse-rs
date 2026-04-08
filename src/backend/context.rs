@@ -691,16 +691,18 @@ impl PulseContext {
         }
 
         let context_ptr: *mut c_void = self as *mut _ as *mut _;
-        if let Some(ctx) = self.context.take() {
-            self.mainloop.lock();
-            if let Ok(o) = ctx.drain(drain_complete, context_ptr) {
+        self.mainloop.lock();
+        if let Some(ref context) = self.context {
+            if let Ok(o) = context.drain(drain_complete, context_ptr) {
                 self.operation_wait(None, &o);
             }
+        }
+        if let Some(ctx) = self.context.take() {
             ctx.clear_state_callback();
             ctx.disconnect();
             ctx.unref();
-            self.mainloop.unlock();
         }
+        self.mainloop.unlock();
     }
 
     pub fn operation_wait<'a, S>(&self, s: S, o: &pulse::Operation) -> bool
