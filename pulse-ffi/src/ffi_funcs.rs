@@ -243,7 +243,8 @@ pub use self::static_fns::*;
 #[cfg(feature = "dlopen")]
 mod dynamic_fns {
     use super::*;
-    use libc::{dlclose, dlopen, dlsym, RTLD_LAZY};
+    use libc::{dladdr, dlclose, dlopen, dlsym, Dl_info, RTLD_LAZY};
+    use std::ffi::{CStr, CString};
     use std::os::raw::{c_char, c_double, c_float, c_int, c_uint, c_void};
 
     #[derive(Debug)]
@@ -252,6 +253,10 @@ mod dynamic_fns {
     }
 
     impl LibLoader {
+        pub fn path(&self) -> Option<CString> {
+            unsafe { dso_path(PA_GET_LIBRARY_VERSION) }
+        }
+
         pub unsafe fn open() -> Option<LibLoader> {
             let h = dlopen(cstr!("libpulse.so.0"), RTLD_LAZY);
             if h.is_null() {
@@ -807,6 +812,20 @@ mod dynamic_fns {
 
             Some(LibLoader { _lib: h })
         }
+    }
+
+    unsafe fn dso_path(symbol: *mut c_void) -> Option<CString> {
+        let mut info = ::std::mem::MaybeUninit::<Dl_info>::zeroed();
+        if dladdr(symbol as *const c_void, info.as_mut_ptr()) == 0 {
+            return None;
+        }
+
+        let info = info.assume_init();
+        if info.dli_fname.is_null() {
+            return None;
+        }
+
+        Some(CStr::from_ptr(info.dli_fname).to_owned())
     }
 
     impl ::std::ops::Drop for LibLoader {
