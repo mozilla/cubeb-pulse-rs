@@ -21,7 +21,6 @@ use std::ptr;
 pub struct DefaultInfo {
     pub sample_spec: pulse::SampleSpec,
     pub channel_map: pulse::ChannelMap,
-    pub flags: pulse::SinkFlags,
 }
 
 fn log_cstr(s: *const c_char) -> Cow<'static, str> {
@@ -124,11 +123,9 @@ impl PulseContext {
                     log_cstr(info.driver),
                     info.latency
                 );
-                let flags = pulse::SinkFlags::from_bits_truncate(info.flags);
                 ctx.default_sink_info = Some(DefaultInfo {
                     sample_spec: info.sample_spec,
                     channel_map: info.channel_map,
-                    flags,
                 });
             }
             ctx.mainloop.signal();

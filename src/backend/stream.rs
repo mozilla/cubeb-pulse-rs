@@ -9,7 +9,7 @@ use cubeb_backend::{
     ffi, log_enabled, ChannelLayout, DeviceId, DeviceRef, Error, InputProcessingParams, Result,
     SampleFormat, StreamOps, StreamParamsRef, StreamPrefs,
 };
-use pulse::{self, CVolumeExt, ChannelMapExt, SampleSpecExt, StreamLatency, USecExt};
+use pulse::{self, ChannelMapExt, SampleSpecExt, StreamLatency, USecExt};
 use pulse_ffi::*;
 use ringbuf::RingBuffer;
 use std::ffi::{CStr, CString};
@@ -762,42 +762,10 @@ impl StreamOps for PulseStream<'_> {
                 cubeb_log!("Error: can't set volume on an input-only stream");
                 Err(Error::Error)
             }
-            Some(ref stm) => {
-                if let Some(ref context) = self.context.context {
+            Some(_) => {
+                if self.context.context.is_some() {
                     self.context.mainloop.lock();
-
-                    let mut cvol: pa_cvolume = Default::default();
-
-                    /* if the pulse daemon is configured to use flat
-                     * volumes, apply our own gain instead of changing
-                     * the input volume on the sink. */
-                    let flags = {
-                        match self.context.default_sink_info {
-                            Some(ref info) => info.flags,
-                            _ => pulse::SinkFlags::empty(),
-                        }
-                    };
-
-                    if flags.contains(pulse::SinkFlags::FLAT_VOLUME) {
-                        self.volume = volume;
-                    } else {
-                        let channels = stm.get_sample_spec().channels;
-                        let vol = pulse::sw_volume_from_linear(f64::from(volume));
-                        cvol.set(u32::from(channels), vol);
-
-                        let index = stm.get_index();
-
-                        let context_ptr = self.context as *const _ as *mut _;
-                        if let Ok(o) = context.set_sink_input_volume(
-                            index,
-                            &cvol,
-                            context_success,
-                            context_ptr,
-                        ) {
-                            self.context.operation_wait(stm, &o);
-                        }
-                    }
-
+                    self.volume = volume;
                     self.context.mainloop.unlock();
                     Ok(())
                 } else {
@@ -1231,14 +1199,6 @@ fn stream_success(_: &pulse::Stream, success: i32, u: *mut c_void) {
         cubeb_log!("stream_success ignored failure: {}", success);
     }
     stm.context.mainloop.signal();
-}
-
-fn context_success(_: &pulse::Context, success: i32, u: *mut c_void) {
-    let ctx = unsafe { &*(u as *mut PulseContext) };
-    if success != 1 {
-        cubeb_log!("context_success ignored failure: {}", success);
-    }
-    ctx.mainloop.signal();
 }
 
 #[cfg(all(test, not(feature = "pulse-dlopen")))]
