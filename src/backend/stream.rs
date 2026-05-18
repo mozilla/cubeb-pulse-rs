@@ -431,12 +431,30 @@ impl<'ctx> PulseStream<'ctx> {
             input_buffer_manager: None,
         });
 
+        // Stable, versioned module-stream-restore.id for this application's
+        // playback streams, so PulseAudio keys the remembered volume on a
+        // value we control rather than the default by-application-name key.
+        // The version prefix lets new streams ignore stale legacy entries.
+        // With no application name, set nothing and let PulseAudio use its
+        // default keying rather than inventing an identity that would make
+        // unrelated nameless clients share one entry.
+        let restore_id = stm.context.context_name.as_ref().and_then(|n| {
+            let mut id = b"cubeb-output-v1:".to_vec();
+            id.extend_from_slice(n.to_bytes());
+            CString::new(id).ok()
+        });
+
         if let Some(ref context) = stm.context.context {
             stm.context.mainloop.lock();
 
             // Setup output stream
             if let Some(stream_params) = output_stream_params {
-                match PulseStream::stream_init(context, stream_params, stream_name) {
+                match PulseStream::stream_init(
+                    context,
+                    stream_params,
+                    stream_name,
+                    restore_id.as_deref(),
+                ) {
                     Ok(s) => {
                         stm.output_sample_spec = *s.get_sample_spec();
 
@@ -488,7 +506,7 @@ impl<'ctx> PulseStream<'ctx> {
 
             // Set up input stream
             if let Some(stream_params) = input_stream_params {
-                match PulseStream::stream_init(context, stream_params, stream_name) {
+                match PulseStream::stream_init(context, stream_params, stream_name, None) {
                     Ok(s) => {
                         stm.input_sample_spec = *s.get_sample_spec();
 
@@ -858,6 +876,7 @@ impl PulseStream<'_> {
         context: &pulse::Context,
         stream_params: &StreamParamsRef,
         stream_name: Option<&CStr>,
+        restore_id: Option<&CStr>,
     ) -> Result<pulse::Stream> {
         if stream_params.prefs() == StreamPrefs::LOOPBACK {
             cubeb_log!("Error: StreamPref::LOOPBACK unimplemented");
@@ -907,7 +926,27 @@ impl PulseStream<'_> {
             _ => Some(layout_to_channel_map(stream_params.layout())),
         };
 
-        let stream = pulse::Stream::new(context, stream_name.unwrap(), &ss, cm.as_ref());
+        // When set, create the stream with the restore id as a proplist
+        // property so module-stream-restore uses it as the key for this
+        // stream's remembered volume.
+        let stream = match restore_id {
+            Some(id) => match pulse::OwnedProplist::new() {
+                Some(mut pl) => {
+                    pl.sets("module-stream-restore.id", id.to_bytes());
+                    // PulseAudio copies the proplist; `pl` is freed on drop
+                    // at the end of this scope.
+                    pulse::Stream::new_with_proplist(
+                        context,
+                        stream_name.unwrap(),
+                        &ss,
+                        cm.as_ref(),
+                        &pl,
+                    )
+                }
+                None => pulse::Stream::new(context, stream_name.unwrap(), &ss, cm.as_ref()),
+            },
+            None => pulse::Stream::new(context, stream_name.unwrap(), &ss, cm.as_ref()),
+        };
 
         match stream {
             None => {
