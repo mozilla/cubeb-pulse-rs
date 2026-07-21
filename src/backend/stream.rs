@@ -271,6 +271,7 @@ pub struct PulseStream<'ctx> {
     input_stream: Option<pulse::Stream>,
     data_callback: ffi::cubeb_data_callback,
     state_callback: ffi::cubeb_state_callback,
+    output_preroll_event: AtomicPtr<pa_defer_event>,
     drain_timer: AtomicPtr<pa_time_event>,
     output_sample_spec: pulse::SampleSpec,
     input_sample_spec: pulse::SampleSpec,
@@ -283,6 +284,22 @@ pub struct PulseStream<'ctx> {
 }
 
 impl<'ctx> PulseStream<'ctx> {
+    fn cancel_output_preroll(&self) -> bool {
+        let _mainloop_lock = self.context.mainloop.lock_guard_if_needed();
+        let output_preroll_event = self
+            .output_preroll_event
+            .swap(ptr::null_mut(), Ordering::AcqRel);
+        if output_preroll_event.is_null() {
+            return false;
+        }
+
+        self.context
+            .mainloop
+            .get_api()
+            .defer_free(output_preroll_event);
+        true
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         context: &'ctx PulseContext,
@@ -421,6 +438,7 @@ impl<'ctx> PulseStream<'ctx> {
             data_callback,
             state_callback,
             user_ptr,
+            output_preroll_event: AtomicPtr::new(ptr::null_mut()),
             drain_timer: AtomicPtr::new(ptr::null_mut()),
             output_sample_spec: pulse::SampleSpec::default(),
             input_sample_spec: pulse::SampleSpec::default(),
@@ -614,6 +632,12 @@ impl<'ctx> PulseStream<'ctx> {
     }
 
     fn destroy(&mut self) {
+        {
+            let _mainloop_lock = self.context.mainloop.lock_guard();
+            self.shutdown = true;
+            self.cancel_output_preroll();
+        }
+
         self.cork(CorkState::cork());
 
         let _mainloop_lock = self.context.mainloop.lock_guard();
@@ -646,8 +670,13 @@ impl Drop for PulseStream<'_> {
 
 impl StreamOps for PulseStream<'_> {
     fn start(&mut self) -> Result<()> {
-        fn output_preroll(_: &pulse::MainloopApi, u: *mut c_void) {
+        fn output_preroll(a: &pulse::MainloopApi, e: *mut pa_defer_event, u: *mut c_void) {
             let stm = unsafe { &mut *(u as *mut PulseStream) };
+            let output_preroll_event = stm
+                .output_preroll_event
+                .swap(ptr::null_mut(), Ordering::AcqRel);
+            debug_assert_eq!(output_preroll_event, e);
+
             if !stm.shutdown {
                 let size = stm
                     .output_stream
@@ -655,6 +684,8 @@ impl StreamOps for PulseStream<'_> {
                     .map_or(0, |s| s.writable_size().unwrap_or(0));
                 stm.trigger_user_callback(std::ptr::null(), size);
             }
+
+            a.defer_free(e);
         }
 
         // Restarting a stream that is still draining is a cubeb API contract
@@ -662,6 +693,10 @@ impl StreamOps for PulseStream<'_> {
         // and re-prerolling would arm a second timer and leak the first.
         if !self.drain_timer.load(Ordering::Acquire).is_null() {
             cubeb_log!("Rejecting start() on a draining stream");
+            return Err(Error::Error);
+        }
+        if !self.output_preroll_event.load(Ordering::Acquire).is_null() {
+            cubeb_log!("Rejecting start() with output preroll pending");
             return Err(Error::Error);
         }
 
@@ -673,10 +708,14 @@ impl StreamOps for PulseStream<'_> {
              * make things roll. This is done via a defer event in order to execute it from PA
              * server thread. */
             let _mainloop_lock = self.context.mainloop.lock_guard();
-            self.context
+            let output_preroll_event = self
+                .context
                 .mainloop
                 .get_api()
-                .once(output_preroll, self as *const _ as *mut _);
+                .defer_new(output_preroll, self as *const _ as *mut _);
+            assert!(!output_preroll_event.is_null());
+            self.output_preroll_event
+                .store(output_preroll_event, Ordering::Release);
         }
 
         Ok(())
@@ -686,6 +725,9 @@ impl StreamOps for PulseStream<'_> {
         {
             let _mainloop_lock = self.context.mainloop.lock_guard();
             self.shutdown = true;
+            if self.cancel_output_preroll() {
+                cubeb_log!("Stream stop: cancelling output preroll");
+            }
             // Cancel any pending drain timer rather than blocking until it
             // fires, matching destroy() and other backends' behaviour.
             let drain_timer = self.drain_timer.load(Ordering::Acquire);
