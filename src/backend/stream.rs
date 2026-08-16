@@ -1136,7 +1136,10 @@ impl PulseStream<'_> {
                             {
                                 let b = buffer as *mut i16;
                                 for i in 0..samples {
-                                    unsafe { *b.offset(i) *= self.volume as i16 };
+                                    unsafe {
+                                        *b.offset(i) =
+                                            (f32::from(*b.offset(i)) * self.volume) as i16
+                                    };
                                 }
                             } else {
                                 let b = buffer as *mut f32;
