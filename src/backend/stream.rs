@@ -262,6 +262,13 @@ impl std::fmt::Debug for BufferManager {
     }
 }
 
+/// Tapered volume control: the volume attribute of the stream is treated
+/// as a volume control position, and the samples will be multiplied by
+/// that value cubed.
+fn calc_volume_multiplier(position: f32) -> f32 {
+    position * position * position
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct PulseStream<'ctx> {
@@ -278,6 +285,7 @@ pub struct PulseStream<'ctx> {
     output_frame_count: AtomicUsize,
     shutdown: bool,
     volume: f32,
+    volume_multiplier: f32,
     state: ffi::cubeb_state,
     input_buffer_manager: Option<BufferManager>,
 }
@@ -427,6 +435,7 @@ impl<'ctx> PulseStream<'ctx> {
             output_frame_count: AtomicUsize::new(0),
             shutdown: false,
             volume: PULSE_NO_GAIN,
+            volume_multiplier: 1.0,
             state: ffi::CUBEB_STATE_ERROR,
             input_buffer_manager: None,
         });
@@ -780,6 +789,7 @@ impl StreamOps for PulseStream<'_> {
                 if self.context.context.is_some() {
                     let _mainloop_lock = self.context.mainloop.lock_guard();
                     self.volume = volume;
+                    self.volume_multiplier = calc_volume_multiplier(volume);
                     Ok(())
                 } else {
                     cubeb_log!("Error: set_volume: no context?");
@@ -1136,12 +1146,12 @@ impl PulseStream<'_> {
                             {
                                 let b = buffer as *mut i16;
                                 for i in 0..samples {
-                                    unsafe { *b.offset(i) *= self.volume as i16 };
+                                    unsafe { *b.offset(i) *= self.volume_multiplier as i16 };
                                 }
                             } else {
                                 let b = buffer as *mut f32;
                                 for i in 0..samples {
-                                    unsafe { *b.offset(i) *= self.volume };
+                                    unsafe { *b.offset(i) *= self.volume_multiplier };
                                 }
                             }
                         }
