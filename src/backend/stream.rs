@@ -1120,6 +1120,10 @@ impl PulseStream<'_> {
                             }
                             return;
                         }
+                        assert!(
+                            got as usize <= size / frame_size,
+                            "data callback returned more frames than requested"
+                        );
 
                         // If more iterations move offset of read buffer
                         if !input_data.is_null() {
@@ -1128,8 +1132,7 @@ impl PulseStream<'_> {
                         }
 
                         if self.volume != PULSE_NO_GAIN {
-                            let samples = (self.output_sample_spec.channels as usize * size
-                                / frame_size) as isize;
+                            let samples = got as isize * self.output_sample_spec.channels as isize;
 
                             if self.output_sample_spec.format == PA_SAMPLE_S16BE
                                 || self.output_sample_spec.format == PA_SAMPLE_S16LE
