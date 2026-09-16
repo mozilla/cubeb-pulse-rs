@@ -695,11 +695,6 @@ impl StreamOps for PulseStream<'_> {
             cubeb_log!("Rejecting start() on a draining stream");
             return Err(Error::Error);
         }
-        if !self.output_preroll_event.load(Ordering::Acquire).is_null() {
-            cubeb_log!("Rejecting start() with output preroll pending");
-            return Err(Error::Error);
-        }
-
         self.shutdown = false;
         self.cork(CorkState::uncork() | CorkState::notify());
 
@@ -708,6 +703,12 @@ impl StreamOps for PulseStream<'_> {
              * make things roll. This is done via a defer event in order to execute it from PA
              * server thread. */
             let _mainloop_lock = self.context.mainloop.lock_guard();
+            // Repeated starts can share a queued preroll. Check under the mainloop
+            // lock so it cannot run between this check and scheduling, and never
+            // overwrite an event that stop() or destroy() still needs to cancel.
+            if !self.output_preroll_event.load(Ordering::Acquire).is_null() {
+                return Ok(());
+            }
             let output_preroll_event = self
                 .context
                 .mainloop
