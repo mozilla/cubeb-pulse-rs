@@ -11,7 +11,8 @@ use cubeb_backend::{
 };
 use pulse::{self, ChannelMapExt, SampleSpecExt, StreamLatency, USecExt};
 use pulse_ffi::*;
-use ringbuf::RingBuffer;
+use ringbuf::traits::{Consumer, Producer, Split};
+use ringbuf::HeapRb as RingBuffer;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_long, c_void};
 use std::ptr;
@@ -21,6 +22,9 @@ use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
 use self::LinearInputBuffer::*;
 use self::RingBufferConsumer::*;
 use self::RingBufferProducer::*;
+
+type RbConsumer<T> = <ringbuf::HeapRb<T> as ringbuf::traits::Split>::Cons;
+type RbProducer<T> = <ringbuf::HeapRb<T> as ringbuf::traits::Split>::Prod;
 
 const PULSE_NO_GAIN: f32 = -1.0;
 
@@ -126,13 +130,13 @@ impl Drop for Device {
 }
 
 enum RingBufferConsumer {
-    IntegerRingBufferConsumer(ringbuf::Consumer<i16>),
-    FloatRingBufferConsumer(ringbuf::Consumer<f32>),
+    IntegerRingBufferConsumer(RbConsumer<i16>),
+    FloatRingBufferConsumer(RbConsumer<f32>),
 }
 
 enum RingBufferProducer {
-    IntegerRingBufferProducer(ringbuf::Producer<i16>),
-    FloatRingBufferProducer(ringbuf::Producer<f32>),
+    IntegerRingBufferProducer(RbProducer<i16>),
+    FloatRingBufferProducer(RbProducer<f32>),
 }
 
 enum LinearInputBuffer {
