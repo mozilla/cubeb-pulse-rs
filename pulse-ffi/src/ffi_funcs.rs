@@ -36,6 +36,20 @@ mod static_fns {
             cb: pa_context_notify_cb_t,
             userdata: *mut c_void,
         ) -> *mut pa_operation;
+        pub fn pa_context_move_sink_input_by_name(
+            c: *mut pa_context,
+            idx: u32,
+            name: *const c_char,
+            cb: pa_context_success_cb_t,
+            userdata: *mut c_void,
+        ) -> *mut pa_operation;
+        pub fn pa_context_move_source_output_by_name(
+            c: *mut pa_context,
+            idx: u32,
+            name: *const c_char,
+            cb: pa_context_success_cb_t,
+            userdata: *mut c_void,
+        ) -> *mut pa_operation;
         pub fn pa_context_get_server_info(
             c: *const pa_context,
             cb: pa_server_info_cb_t,
@@ -321,6 +335,20 @@ mod dynamic_fns {
             };
             PA_CONTEXT_DRAIN = {
                 let fp = dlsym(h, cstr!("pa_context_drain"));
+                if fp.is_null() {
+                    return None;
+                }
+                fp
+            };
+            PA_CONTEXT_MOVE_SINK_INPUT_BY_NAME = {
+                let fp = dlsym(h, cstr!("pa_context_move_sink_input_by_name"));
+                if fp.is_null() {
+                    return None;
+                }
+                fp
+            };
+            PA_CONTEXT_MOVE_SOURCE_OUTPUT_BY_NAME = {
+                let fp = dlsym(h, cstr!("pa_context_move_source_output_by_name"));
                 if fp.is_null() {
                     return None;
                 }
@@ -954,6 +982,42 @@ mod dynamic_fns {
                 *mut c_void,
             ) -> *mut pa_operation,
         >(PA_CONTEXT_DRAIN))(c, cb, userdata)
+    }
+
+    static mut PA_CONTEXT_MOVE_SINK_INPUT_BY_NAME: *mut ::libc::c_void = std::ptr::null_mut();
+    #[inline]
+    /// # Safety
+    /// `c` and `name` must be valid PulseAudio context and C string pointers.
+    /// The callback and userdata must remain valid until the operation completes.
+    pub unsafe fn pa_context_move_sink_input_by_name(
+        c: *mut pa_context,
+        idx: u32,
+        name: *const c_char,
+        cb: pa_context_success_cb_t,
+        userdata: *mut c_void,
+    ) -> *mut pa_operation {
+        (::std::mem::transmute::<
+            *mut ::libc::c_void,
+            extern "C" fn(*mut pa_context, u32, *const c_char, pa_context_success_cb_t, *mut c_void) -> *mut pa_operation,
+        >(PA_CONTEXT_MOVE_SINK_INPUT_BY_NAME))(c, idx, name, cb, userdata)
+    }
+
+    static mut PA_CONTEXT_MOVE_SOURCE_OUTPUT_BY_NAME: *mut ::libc::c_void = std::ptr::null_mut();
+    #[inline]
+    /// # Safety
+    /// `c` and `name` must be valid PulseAudio context and C string pointers.
+    /// The callback and userdata must remain valid until the operation completes.
+    pub unsafe fn pa_context_move_source_output_by_name(
+        c: *mut pa_context,
+        idx: u32,
+        name: *const c_char,
+        cb: pa_context_success_cb_t,
+        userdata: *mut c_void,
+    ) -> *mut pa_operation {
+        (::std::mem::transmute::<
+            *mut ::libc::c_void,
+            extern "C" fn(*mut pa_context, u32, *const c_char, pa_context_success_cb_t, *mut c_void) -> *mut pa_operation,
+        >(PA_CONTEXT_MOVE_SOURCE_OUTPUT_BY_NAME))(c, idx, name, cb, userdata)
     }
 
     static mut PA_CONTEXT_GET_SERVER_INFO: *mut ::libc::c_void = 0 as *mut _;

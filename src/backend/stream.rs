@@ -490,20 +490,33 @@ impl<'ctx> PulseStream<'ctx> {
                             tlength: buffer_size_bytes * 2,
                             minreq: buffer_size_bytes / 4,
                         };
-                        let device_name = super::try_cstr_from(output_device as *const _);
+                        let device_name = super::try_cstr_from(output_device as *const _)
+                            .map(CStr::to_owned)
+                            .or_else(|| stm.context.default_sink_name.clone());
+                        if device_name.is_none() {
+                            stm.output_stream = Some(s);
+                            drop(mainloop_lock.take());
+                            stm.destroy();
+                            return Err(Error::Error);
+                        }
                         let mut stream_flags = pulse::StreamFlags::AUTO_TIMING_UPDATE
                             | pulse::StreamFlags::INTERPOLATE_TIMING
                             | pulse::StreamFlags::START_CORKED
                             | pulse::StreamFlags::ADJUST_LATENCY;
-                        if device_name.is_some()
+                        if !output_device.is_null()
                             || stream_params
                                 .prefs()
                                 .contains(StreamPrefs::DISABLE_DEVICE_SWITCHING)
                         {
                             stream_flags |= pulse::StreamFlags::DONT_MOVE;
                         }
-                        let connect_result =
-                            s.connect_playback(device_name, &battr, stream_flags, None, None);
+                        let connect_result = s.connect_playback(
+                            device_name.as_deref(),
+                            &battr,
+                            stream_flags,
+                            None,
+                            None,
+                        );
                         // Set output_stream before checking connect_result so
                         // destroy() can clean up the stream on error.
                         stm.output_stream = Some(s);
@@ -541,19 +554,28 @@ impl<'ctx> PulseStream<'ctx> {
                             tlength: buffer_size_bytes,
                             minreq: buffer_size_bytes,
                         };
-                        let device_name = super::try_cstr_from(input_device as *const _);
+                        let device_name = super::try_cstr_from(input_device as *const _)
+                            .map(CStr::to_owned)
+                            .or_else(|| stm.context.default_source_name.clone());
+                        if device_name.is_none() {
+                            stm.input_stream = Some(s);
+                            drop(mainloop_lock.take());
+                            stm.destroy();
+                            return Err(Error::Error);
+                        }
                         let mut stream_flags = pulse::StreamFlags::AUTO_TIMING_UPDATE
                             | pulse::StreamFlags::INTERPOLATE_TIMING
                             | pulse::StreamFlags::START_CORKED
                             | pulse::StreamFlags::ADJUST_LATENCY;
-                        if device_name.is_some()
+                        if !input_device.is_null()
                             || stream_params
                                 .prefs()
                                 .contains(StreamPrefs::DISABLE_DEVICE_SWITCHING)
                         {
                             stream_flags |= pulse::StreamFlags::DONT_MOVE;
                         }
-                        let connect_result = s.connect_record(device_name, &battr, stream_flags);
+                        let connect_result =
+                            s.connect_record(device_name.as_deref(), &battr, stream_flags);
                         // Set input_stream before checking connect_result so
                         // destroy() can clean up the stream on error.
                         stm.input_stream = Some(s);
@@ -599,6 +621,23 @@ impl<'ctx> PulseStream<'ctx> {
                 return Err(Error::Error);
             }
 
+            if output_device.is_null()
+                && output_stream_params
+                    .is_some_and(|p| !p.prefs().contains(StreamPrefs::DISABLE_DEVICE_SWITCHING))
+            {
+                if let Some(stream) = &stm.output_stream {
+                    stm.context.register_default_stream(stream, true);
+                }
+            }
+            if input_device.is_null()
+                && input_stream_params
+                    .is_some_and(|p| !p.prefs().contains(StreamPrefs::DISABLE_DEVICE_SWITCHING))
+            {
+                if let Some(stream) = &stm.input_stream {
+                    stm.context.register_default_stream(stream, false);
+                }
+            }
+
             // TODO:
             if log_enabled() {
                 if let Some(ref output_stream) = stm.output_stream {
@@ -635,6 +674,12 @@ impl<'ctx> PulseStream<'ctx> {
     fn destroy(&mut self) {
         {
             let _mainloop_lock = self.context.mainloop.lock_guard();
+            if let Some(stream) = &self.output_stream {
+                self.context.unregister_default_stream(stream, true);
+            }
+            if let Some(stream) = &self.input_stream {
+                self.context.unregister_default_stream(stream, false);
+            }
             self.shutdown = true;
             self.cancel_output_preroll();
         }
@@ -1619,3 +1664,7 @@ mod test {
         ]
     }
 }
+
+#[cfg(test)]
+#[path = "device_switching_tests.rs"]
+mod device_switching_tests;

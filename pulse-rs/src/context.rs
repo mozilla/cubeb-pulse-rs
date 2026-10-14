@@ -215,6 +215,25 @@ impl Context {
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub fn move_sink_input_by_name(&self, index: u32, name: &CStr) -> Result<Operation> {
+        op_or_err!(
+            self,
+            ffi::pa_context_move_sink_input_by_name(
+                self.raw_mut(), index, name.as_ptr(), None, ptr::null_mut()
+            )
+        )
+    }
+
+    pub fn move_source_output_by_name(&self, index: u32, name: &CStr) -> Result<Operation> {
+        op_or_err!(
+            self,
+            ffi::pa_context_move_source_output_by_name(
+                self.raw_mut(), index, name.as_ptr(), None, ptr::null_mut()
+            )
+        )
+    }
+
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn get_server_info<CB>(&self, _: CB, userdata: *mut c_void) -> Result<Operation>
     where
         CB: Fn(&Context, Option<&ServerInfo>, *mut c_void),
