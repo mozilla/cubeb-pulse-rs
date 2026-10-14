@@ -219,7 +219,11 @@ impl Context {
         op_or_err!(
             self,
             ffi::pa_context_move_sink_input_by_name(
-                self.raw_mut(), index, name.as_ptr(), None, ptr::null_mut()
+                self.raw_mut(),
+                index,
+                name.as_ptr(),
+                None,
+                ptr::null_mut()
             )
         )
     }
@@ -228,7 +232,11 @@ impl Context {
         op_or_err!(
             self,
             ffi::pa_context_move_source_output_by_name(
-                self.raw_mut(), index, name.as_ptr(), None, ptr::null_mut()
+                self.raw_mut(),
+                index,
+                name.as_ptr(),
+                None,
+                ptr::null_mut()
             )
         )
     }

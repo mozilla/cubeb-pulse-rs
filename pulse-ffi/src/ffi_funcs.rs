@@ -998,7 +998,13 @@ mod dynamic_fns {
     ) -> *mut pa_operation {
         (::std::mem::transmute::<
             *mut ::libc::c_void,
-            extern "C" fn(*mut pa_context, u32, *const c_char, pa_context_success_cb_t, *mut c_void) -> *mut pa_operation,
+            extern "C" fn(
+                *mut pa_context,
+                u32,
+                *const c_char,
+                pa_context_success_cb_t,
+                *mut c_void,
+            ) -> *mut pa_operation,
         >(PA_CONTEXT_MOVE_SINK_INPUT_BY_NAME))(c, idx, name, cb, userdata)
     }
 
@@ -1016,7 +1022,13 @@ mod dynamic_fns {
     ) -> *mut pa_operation {
         (::std::mem::transmute::<
             *mut ::libc::c_void,
-            extern "C" fn(*mut pa_context, u32, *const c_char, pa_context_success_cb_t, *mut c_void) -> *mut pa_operation,
+            extern "C" fn(
+                *mut pa_context,
+                u32,
+                *const c_char,
+                pa_context_success_cb_t,
+                *mut c_void,
+            ) -> *mut pa_operation,
         >(PA_CONTEXT_MOVE_SOURCE_OUTPUT_BY_NAME))(c, idx, name, cb, userdata)
     }
 
