@@ -63,6 +63,7 @@ name = "cubeb-pulse"
 version = "0.5.0"
 dependencies = [
  "cubeb-backend",
+ "cubeb-sys",
  "pulse",
  "pulse-ffi",
  "ringbuf",

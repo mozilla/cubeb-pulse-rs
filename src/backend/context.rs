@@ -29,6 +29,12 @@ fn log_cstr(s: *const c_char) -> Cow<'static, str> {
 
 pub const PULSE_OPS: Ops = capi_new!(PulseContext, PulseStream);
 
+#[derive(Debug)]
+struct DefaultStream {
+    stream: *const pa_stream,
+    index: u32,
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct PulseContext {
@@ -49,6 +55,8 @@ pub struct PulseContext {
     #[cfg(feature = "pulse-dlopen")]
     pub libpulse: LibLoader,
     devids: RefCell<Intern>,
+    default_sink_inputs: RefCell<Vec<DefaultStream>>,
+    default_source_outputs: RefCell<Vec<DefaultStream>>,
 }
 
 impl PulseContext {
@@ -85,6 +93,8 @@ impl PulseContext {
             version_0_9_8: false,
             version_2_0_0: false,
             devids: RefCell::new(Intern::new()),
+            default_sink_inputs: RefCell::new(Vec::new()),
+            default_source_outputs: RefCell::new(Vec::new()),
         });
 
         Ok(ctx)
@@ -108,6 +118,8 @@ impl PulseContext {
             version_0_9_8: false,
             version_2_0_0: false,
             devids: RefCell::new(Intern::new()),
+            default_sink_inputs: RefCell::new(Vec::new()),
+            default_source_outputs: RefCell::new(Vec::new()),
         }))
     }
 
@@ -150,6 +162,17 @@ impl PulseContext {
 
             ctx.default_sink_name = new_sink_name;
             ctx.default_source_name = new_source_name;
+
+            if sink_changed {
+                for stream in ctx.default_sink_inputs.borrow().iter() {
+                    ctx.move_default_stream(stream.index, true);
+                }
+            }
+            if source_changed {
+                for stream in ctx.default_source_outputs.borrow().iter() {
+                    ctx.move_default_stream(stream.index, false);
+                }
+            }
 
             if sink_changed && ctx.output_collection_changed_callback.is_some() {
                 unsafe {
@@ -220,9 +243,7 @@ impl PulseContext {
         }
 
         /* Update `default_sink_info` when the default device changes. */
-        if let Err(e) = ctx.subscribe_notifications(pulse::SubscriptionMask::SERVER) {
-            cubeb_log!("subscribe_notifications ignored failure: {}", e);
-        }
+        ctx.subscribe_notifications(pulse::SubscriptionMask::SERVER)?;
 
         // Return the result.
         Ok(ctx)
@@ -238,6 +259,68 @@ impl PulseContext {
 
         if !self.mainloop.is_null() {
             self.mainloop.stop();
+        }
+    }
+
+    pub fn register_default_stream(&self, stream: &pulse::Stream, output: bool) {
+        let streams = if output {
+            &self.default_sink_inputs
+        } else {
+            &self.default_source_outputs
+        };
+        let index = stream.get_index();
+        streams.borrow_mut().push(DefaultStream {
+            stream: stream.raw_mut(),
+            index,
+        });
+        self.move_default_stream(index, output);
+    }
+
+    pub fn unregister_default_stream(&self, stream: &pulse::Stream, output: bool) {
+        let streams = if output {
+            &self.default_sink_inputs
+        } else {
+            &self.default_source_outputs
+        };
+        streams
+            .borrow_mut()
+            .retain(|s| !ptr::eq(s.stream, stream.raw_mut()));
+    }
+
+    fn move_default_stream(&self, index: u32, output: bool) {
+        if let Some(context) = &self.context {
+            let name = if output {
+                &self.default_sink_name
+            } else {
+                &self.default_source_name
+            };
+            if let Some(name) = name {
+                let result = if output {
+                    context.move_sink_input_by_name(index, name)
+                } else {
+                    context.move_source_output_by_name(index, name)
+                };
+                match result {
+                    Ok(operation) => operation.detach(),
+                    Err(e) => {
+                        cubeb_log!("Could not move stream {} to default device: {}", index, e);
+                    }
+                }
+            }
+        }
+    }
+
+    fn refresh_default_devices(&mut self) -> Result<()> {
+        let user_data = self as *mut Self as *mut c_void;
+        let _mainloop_lock = self.mainloop.lock_guard();
+        let context = self.context.as_ref().ok_or(Error::Error)?;
+        let operation = context
+            .get_server_info(Self::server_info_cb, user_data)
+            .map_err(|_| Error::Error)?;
+        if self.operation_wait(None, &operation) {
+            Ok(())
+        } else {
+            Err(Error::Error)
         }
     }
 
@@ -581,6 +664,8 @@ impl ContextOps for PulseContext {
             self.context_init()?;
         }
 
+        self.refresh_default_devices()?;
+
         let stm = PulseStream::new(
             self,
             stream_name,
@@ -717,6 +802,8 @@ impl PulseContext {
 
         let context_ptr: *mut c_void = self as *mut _ as *mut _;
         let _mainloop_lock = self.mainloop.lock_guard();
+        self.default_sink_inputs.borrow_mut().clear();
+        self.default_source_outputs.borrow_mut().clear();
         if let Some(ref context) = self.context {
             if let Ok(o) = context.drain(drain_complete, context_ptr) {
                 self.operation_wait(None, &o);

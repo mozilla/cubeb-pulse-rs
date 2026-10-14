@@ -20,6 +20,9 @@ pulse = { path = "pulse-rs" }
 semver = "1.0"
 ringbuf = "0.5.2"
 
+[dev-dependencies]
+cubeb-sys = { version = "0.34.1", features = ["unittest-build"] }
+
 # Workaround for https://github.com/rust-lang/cargo/issues/6745 to allow this
 # Cargo.toml file to appear under a subdirectory of a workspace without being in
 # that workspace (e.g. in cubeb-rs).
