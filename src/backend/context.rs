@@ -303,7 +303,7 @@ impl PulseContext {
                 match result {
                     Ok(operation) => operation.detach(),
                     Err(e) => {
-                        cubeb_log!("Could not move stream {} to default device: {}", index, e)
+                        cubeb_log!("Could not move stream {} to default device: {}", index, e);
                     }
                 }
             }
