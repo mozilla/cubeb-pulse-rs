@@ -23,6 +23,31 @@ use self::LinearInputBuffer::*;
 use self::RingBufferConsumer::*;
 use self::RingBufferProducer::*;
 
+// Input has no buffered output to wait for. Deliver its terminal state once
+// and stop calling the application after either a drain request or an error.
+fn process_input_callback<F>(
+    shutdown: &mut bool,
+    frames: usize,
+    callback: F,
+) -> Option<ffi::cubeb_state>
+where
+    F: FnOnce() -> c_long,
+{
+    if *shutdown {
+        return None;
+    }
+    let got = callback();
+    if got == frames as c_long {
+        return None;
+    }
+    *shutdown = true;
+    Some(if got < 0 || got as usize > frames {
+        ffi::CUBEB_STATE_ERROR
+    } else {
+        ffi::CUBEB_STATE_DRAINED
+    })
+}
+
 const PULSE_NO_GAIN: f32 = -1.0;
 
 /// Iterator interface to `ChannelLayout`.
@@ -359,28 +384,24 @@ impl<'ctx> PulseStream<'ctx> {
                             .unwrap()
                             .push_input_data(read_data, read_samples);
                     } else {
-                        // input/capture only operation. Call callback directly
-                        let got = unsafe {
-                            stm.data_callback.unwrap()(
-                                stm as *mut _ as *mut _,
-                                stm.user_ptr,
-                                read_data,
-                                ptr::null_mut(),
-                                read_frames as c_long,
-                            )
-                        };
-
-                        if got < 0 || got as usize != read_frames {
-                            let _ = s.cancel_write();
-                            stm.shutdown = true;
-                            if got < 0 {
-                                unsafe {
-                                    stm.state_callback.unwrap()(
-                                        stm as *mut _ as *mut _,
-                                        stm.user_ptr,
-                                        ffi::CUBEB_STATE_ERROR,
-                                    );
-                                }
+                        let callback = stm.data_callback.unwrap();
+                        let stream_ptr = stm as *mut _ as *mut ffi::cubeb_stream;
+                        let user_ptr = stm.user_ptr;
+                        let state =
+                            process_input_callback(&mut stm.shutdown, read_frames, || unsafe {
+                                callback(
+                                    stream_ptr,
+                                    user_ptr,
+                                    read_data,
+                                    ptr::null_mut(),
+                                    read_frames as c_long,
+                                )
+                            });
+                        // Release the peeked input even when this is the last callback.
+                        if stm.shutdown {
+                            let _ = s.drop();
+                            if let Some(state) = state {
+                                stm.state_change_callback(state);
                             }
                             break;
                         }
@@ -1220,7 +1241,7 @@ impl PulseStream<'_> {
                             } else {
                                 cubeb_logv!(
                                     "Not enough room to pad up to prebuf when prebuffering."
-                                )
+                                );
                             }
                         }
 
@@ -1617,5 +1638,57 @@ mod test {
             PA_CHANNEL_POSITION_SIDE_LEFT,
             PA_CHANNEL_POSITION_SIDE_RIGHT
         ]
+    }
+}
+
+#[cfg(test)]
+mod input_callback_tests {
+    use super::*;
+
+    #[test]
+    fn short_input_return_drains_once() {
+        for returned in [0, 127] {
+            let mut shutdown = false;
+            let mut calls = 0;
+            let state = process_input_callback(&mut shutdown, 128, || {
+                calls += 1;
+                returned
+            });
+            assert_eq!(state, Some(ffi::CUBEB_STATE_DRAINED));
+            assert!(shutdown);
+            assert_eq!(
+                process_input_callback(&mut shutdown, 128, || {
+                    calls += 1;
+                    128
+                }),
+                None
+            );
+            assert_eq!(calls, 1);
+        }
+    }
+
+    #[test]
+    fn full_input_return_keeps_running() {
+        let mut shutdown = false;
+        for _ in 0..2 {
+            assert_eq!(process_input_callback(&mut shutdown, 128, || 128), None);
+            assert!(!shutdown);
+        }
+    }
+
+    #[test]
+    fn input_error_is_not_a_drain() {
+        for returned in [-1, 129] {
+            let mut shutdown = false;
+            assert_eq!(
+                process_input_callback(&mut shutdown, 128, || returned),
+                Some(ffi::CUBEB_STATE_ERROR)
+            );
+            assert!(shutdown);
+            assert_eq!(
+                process_input_callback(&mut shutdown, 128, || panic!("callback after error")),
+                None
+            );
+        }
     }
 }
