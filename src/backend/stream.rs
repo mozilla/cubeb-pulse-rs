@@ -1241,7 +1241,7 @@ impl PulseStream<'_> {
                             } else {
                                 cubeb_logv!(
                                     "Not enough room to pad up to prebuf when prebuffering."
-                                )
+                                );
                             }
                         }
 
