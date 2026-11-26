@@ -163,7 +163,13 @@ impl Stream {
                 flags.into(),
             )
         };
-        error_result!((), r)
+        if r < 0 {
+            let err = self
+                .get_context()
+                .map_or(ffi::PA_ERR_UNKNOWN, |c| c.errno());
+            return Err(ErrorCode::from_error_code(err));
+        }
+        Ok(())
     }
 
     pub fn disconnect(&self) -> Result<()> {

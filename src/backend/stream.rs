@@ -270,6 +270,8 @@ pub struct PulseStream<'ctx> {
     user_ptr: *mut c_void,
     output_stream: Option<pulse::Stream>,
     input_stream: Option<pulse::Stream>,
+    input_creation_denied: bool,
+    creating: bool,
     data_callback: ffi::cubeb_data_callback,
     state_callback: ffi::cubeb_state_callback,
     output_preroll_event: AtomicPtr<pa_defer_event>,
@@ -321,6 +323,21 @@ impl<'ctx> PulseStream<'ctx> {
                 stm.state_change_callback(ffi::CUBEB_STATE_ERROR);
             }
             stm.context.mainloop.signal();
+        }
+
+        fn check_input_error(s: &pulse::Stream, u: *mut c_void) {
+            let stm = unsafe { &mut *(u as *mut PulseStream) };
+            // PulseAudio invokes this callback under the mainloop lock. Capture
+            // errno here before another operation can replace the context error.
+            if stm.creating && s.get_state() == pulse::StreamState::Failed {
+                if let Some(context) = s.get_context() {
+                    if context.get_state().is_good() && context.errno() == pulse_ffi::PA_ERR_ACCESS
+                    {
+                        stm.input_creation_denied = true;
+                    }
+                }
+            }
+            check_error(s, u);
         }
 
         fn read_data(s: &pulse::Stream, nbytes: usize, u: *mut c_void) {
@@ -436,6 +453,8 @@ impl<'ctx> PulseStream<'ctx> {
             context,
             output_stream: None,
             input_stream: None,
+            input_creation_denied: false,
+            creating: true,
             data_callback,
             state_callback,
             user_ptr,
@@ -529,7 +548,7 @@ impl<'ctx> PulseStream<'ctx> {
                     Ok(s) => {
                         stm.input_sample_spec = *s.get_sample_spec();
 
-                        s.set_state_callback(check_error, stm.as_mut() as *mut _ as *mut _);
+                        s.set_state_callback(check_input_error, stm.as_mut() as *mut _ as *mut _);
                         s.set_read_callback(read_data, stm.as_mut() as *mut _ as *mut _);
 
                         let buffer_size_bytes =
@@ -560,8 +579,15 @@ impl<'ctx> PulseStream<'ctx> {
                         if let Err(e) = connect_result {
                             cubeb_log!("Input stream connect error: {}", e);
                             drop(mainloop_lock.take());
+                            let error = if e
+                                == pulse::ErrorCode::from_error_code(pulse_ffi::PA_ERR_ACCESS)
+                            {
+                                Error::PermissionDenied
+                            } else {
+                                Error::Error
+                            };
                             stm.destroy();
-                            return Err(Error::Error);
+                            return Err(error);
                         }
                     }
                     Err(e) => {
@@ -584,7 +610,9 @@ impl<'ctx> PulseStream<'ctx> {
                 ))
             }
 
-            let r = if stm.wait_until_ready() {
+            let ready = stm.wait_until_ready();
+            stm.creating = false;
+            let r = if ready {
                 /* force a timing update now, otherwise timing info does not become valid
                 until some point after initialization has completed. */
                 stm.update_timing_info()
@@ -593,10 +621,15 @@ impl<'ctx> PulseStream<'ctx> {
             };
 
             if !r {
+                let error = if stm.input_creation_denied {
+                    Error::PermissionDenied
+                } else {
+                    Error::Error
+                };
                 drop(mainloop_lock.take());
                 stm.destroy();
                 cubeb_log!("Error while waiting for the stream to be ready");
-                return Err(Error::Error);
+                return Err(error);
             }
 
             // TODO:
@@ -1086,13 +1119,15 @@ impl PulseStream<'_> {
             true
         }
 
-        if let Some(ref stm) = self.output_stream {
+        // Wait for capture first so a simultaneous playback failure does not
+        // hide an explicit capture denial.
+        if let Some(ref stm) = self.input_stream {
             if !wait_until_io_stream_ready(stm, self.context) {
                 return false;
             }
         }
 
-        if let Some(ref stm) = self.input_stream {
+        if let Some(ref stm) = self.output_stream {
             if !wait_until_io_stream_ready(stm, self.context) {
                 return false;
             }
